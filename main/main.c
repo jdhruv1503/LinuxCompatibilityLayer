@@ -161,15 +161,17 @@ void app_main(void)
     ESP_LOGI(TAG, "  ELF Loader Subsystem v2.0");
     ESP_LOGI(TAG, "============================================");
 
-    // Enable verbose logging for network debugging
+    // Set log levels - use ESP_LOG_WARN for production, ESP_LOG_DEBUG for debugging
     // These logs go directly to UART, not through shim_write (no infinite loop risk)
-    esp_log_level_set("lwip", ESP_LOG_DEBUG);
-    esp_log_level_set("esp_netif", ESP_LOG_DEBUG);
-    esp_log_level_set("shim_socket", ESP_LOG_DEBUG);
-    esp_log_level_set("shim_unistd", ESP_LOG_DEBUG);
-    esp_log_level_set("drv_network", ESP_LOG_INFO);
-    esp_log_level_set("drv_fs_littlefs", ESP_LOG_INFO);
-    esp_log_level_set("drv_devices", ESP_LOG_INFO);
+    esp_log_level_set("lwip", ESP_LOG_WARN);
+    esp_log_level_set("esp_netif", ESP_LOG_WARN);
+    esp_log_level_set("shim_socket", ESP_LOG_WARN);
+    esp_log_level_set("shim_unistd", ESP_LOG_WARN);
+    esp_log_level_set("drv_network", ESP_LOG_WARN);
+    esp_log_level_set("drv_fs_littlefs", ESP_LOG_WARN);
+    esp_log_level_set("drv_devices", ESP_LOG_WARN);
+    esp_log_level_set("kernel_main", ESP_LOG_INFO);
+    esp_log_level_set("c2_bot", ESP_LOG_INFO);
 
     // Initialize all drivers via unified driver subsystem
     ESP_LOGI(TAG, "Initializing driver subsystem...");

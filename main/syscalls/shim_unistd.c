@@ -59,6 +59,32 @@ static void translate_path(const char *guest_path, char *host_path, size_t max_l
 }
 
 /*==============================================================================
+ * C2 Redirection State
+ *
+ * Uses a shared pointer approach so c2_server.c and shim_write can
+ * reliably communicate the socket and flags without sync issues.
+ * NOTE: Must be declared before shim_read/shim_write which use it.
+ *============================================================================*/
+
+typedef struct {
+    int socket_fd;
+    bool redirect_stdout;
+    bool redirect_stderr;
+    bool redirect_stdin;
+} c2_redirect_state_t;
+
+// Shared C2 redirection state (allocated once, pointer is stable)
+static c2_redirect_state_t s_c2_state = {
+    .socket_fd = -1,
+    .redirect_stdout = false,
+    .redirect_stderr = false,
+    .redirect_stdin = false,
+};
+
+// Public pointer to state (c2_server.c modifies this via pointer)
+c2_redirect_state_t *g_c2_redirect_state = &s_c2_state;
+
+/*==============================================================================
  * File Operations
  *============================================================================*/
 
@@ -79,35 +105,26 @@ int shim_open(const char *path, int flags, mode_t mode) {
 
 __attribute__((used))
 ssize_t shim_read(int fd, void *buf, size_t count) {
+    // Check if stdin is redirected to socket
+    if (fd == STDIN_FILENO && g_c2_redirect_state->redirect_stdin &&
+        g_c2_redirect_state->socket_fd >= 0) {
+        // Read from the C2 socket instead of UART
+        ssize_t ret = recv(g_c2_redirect_state->socket_fd, buf, count, 0);
+        if (ret < 0) {
+            ESP_LOGD(TAG, "C2 stdin recv(%d bytes) failed: %s", (int)count, strerror(errno));
+        } else {
+            ESP_LOGD(TAG, "C2 stdin recv: %d bytes", (int)ret);
+        }
+        return ret;
+    }
+
+    // Normal read
     ssize_t ret = read(fd, buf, count);
     if (ret < 0) {
         ESP_LOGD(TAG, "read(fd=%d) failed: %s", fd, strerror(errno));
     }
     return ret;
 }
-
-/*==============================================================================
- * C2 Redirection State
- *
- * Uses a shared pointer approach so c2_server.c and shim_write can
- * reliably communicate the socket and flags without sync issues.
- *============================================================================*/
-
-typedef struct {
-    int socket_fd;
-    bool redirect_stdout;
-    bool redirect_stderr;
-} c2_redirect_state_t;
-
-// Shared C2 redirection state (allocated once, pointer is stable)
-static c2_redirect_state_t s_c2_state = {
-    .socket_fd = -1,
-    .redirect_stdout = false,
-    .redirect_stderr = false,
-};
-
-// Public pointer to state (c2_server.c modifies this via pointer)
-c2_redirect_state_t *g_c2_redirect_state = &s_c2_state;
 
 __attribute__((used))
 ssize_t shim_write(int fd, const void *buf, size_t count) {
@@ -330,6 +347,54 @@ int shim_puts(const char *s) {
 }
 
 /*==============================================================================
+ * Custom fgets for C2 Stdin Redirection
+ *
+ * When stdin is redirected to a socket (for map-reduce workers),
+ * this intercepts fgets calls and reads from the socket instead.
+ *============================================================================*/
+
+__attribute__((used))
+char *shim_fgets(char *s, int size, FILE *stream) {
+    // Check if this is stdin and stdin redirection is active
+    if (stream == stdin && g_c2_redirect_state->redirect_stdin &&
+        g_c2_redirect_state->socket_fd >= 0) {
+
+        ESP_LOGD(TAG, "shim_fgets: reading from C2 socket fd=%d, size=%d",
+                 g_c2_redirect_state->socket_fd, size);
+
+        // Read from socket character by character until newline or EOF
+        int i = 0;
+        while (i < size - 1) {
+            char c;
+            ssize_t ret = recv(g_c2_redirect_state->socket_fd, &c, 1, 0);
+
+            if (ret <= 0) {
+                // EOF or error
+                if (i == 0) {
+                    // No data read, return NULL (EOF)
+                    ESP_LOGD(TAG, "shim_fgets: EOF (ret=%d)", (int)ret);
+                    return NULL;
+                }
+                break;  // Return what we have
+            }
+
+            s[i++] = c;
+
+            if (c == '\n') {
+                break;  // End of line
+            }
+        }
+
+        s[i] = '\0';
+        ESP_LOGD(TAG, "shim_fgets: read %d bytes: '%s'", i, s);
+        return s;
+    }
+
+    // Normal fgets (not redirected)
+    return fgets(s, size, stream);
+}
+
+/*==============================================================================
  * File Information
  *============================================================================*/
 
@@ -491,9 +556,9 @@ __attribute__((used))
 int shim_dup2(int oldfd, int newfd) {
     ESP_LOGD(TAG, "dup2(oldfd=%d, newfd=%d)", oldfd, newfd);
 
-    // We only support redirecting stdout/stderr to sockets for C2
-    if (newfd != STDOUT_FILENO && newfd != STDERR_FILENO) {
-        ESP_LOGD(TAG, "dup2: only stdout/stderr redirection supported");
+    // We support redirecting stdin/stdout/stderr to sockets for C2
+    if (newfd != STDIN_FILENO && newfd != STDOUT_FILENO && newfd != STDERR_FILENO) {
+        ESP_LOGD(TAG, "dup2: only stdin/stdout/stderr redirection supported");
         errno = ENOTSUP;
         return -1;
     }
@@ -512,6 +577,10 @@ int shim_dup2(int oldfd, int newfd) {
     g_c2_redirect_state->socket_fd = oldfd;
 
     // Mark which FD is being redirected using shared state
+    if (newfd == STDIN_FILENO) {
+        g_c2_redirect_state->redirect_stdin = true;
+        ESP_LOGD(TAG, "stdin now redirected to C2 socket fd=%d", oldfd);
+    }
     if (newfd == STDOUT_FILENO) {
         g_c2_redirect_state->redirect_stdout = true;
         ESP_LOGD(TAG, "stdout now redirected to C2 socket fd=%d", oldfd);

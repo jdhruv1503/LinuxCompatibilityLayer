@@ -310,7 +310,7 @@ After successful build:
 | `tools/run_build.bat` | Wrapper for `idf.py` (handles MSYSTEM) |
 | `tools/export_symbols.py` | Generate symbol table from ELF |
 | `tools/build_guest_app.bat` | Compile guest ELF applications (manual method) |
-| `tools/c2_master.py` | Python C2 client for sending payloads to running bot |
+| `tools/c2_master.py` | Distributed map-reduce demo controller (multi-node QEMU) |
 
 ### build_and_run.py Options Reference
 
@@ -349,6 +349,29 @@ python tools/build_and_run.py --set-elf hello_world
 - Can be updated/modified without rebuilding firmware
 - Supports clean separation of concerns (bot vs payload)
 - All guest apps can spawn subprocesses via execve() if needed
+
+### Distributed Map-Reduce Demo
+
+Run a 4-node cluster demo with distributed computation:
+
+```bash
+# Build the map-reduce worker first
+python tools/build_and_run.py --build-guest map_reduce_worker --build
+
+# Run the demo in automated test mode
+python tools/c2_master.py --auto --timeout 40
+
+# Or run in interactive mode with split-screen UI
+python tools/c2_master.py
+
+# Press 'r' to run map-reduce, 'q' to quit
+```
+
+**Demo Features:**
+- Spawns 4 QEMU instances with port forwarding (9001-9004)
+- Distributes sum(1..1000) calculation across nodes
+- Aggregates results and verifies correctness
+- Interactive terminal UI shows real-time node output
 
 ## Documentation
 

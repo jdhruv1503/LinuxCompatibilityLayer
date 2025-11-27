@@ -1,0 +1,135 @@
+\documentclass{beamer}
+\usetheme{Madrid}
+\usecolortheme{default}
+
+\title[ESP32 Linux Compatibility Layer]{Architecting a POSIX-Compliant Runtime Environment on ESP32}
+\subtitle{A Unikernel Approach to Dynamic ELF Execution}
+\author{Dhruv}
+\institute[University]{Department of Computer Science}
+\date{\today}
+
+\begin{document}
+
+% Title Slide
+\begin{frame}
+    \titlepage
+\end{frame}
+
+% Outline
+\begin{frame}{Outline}
+    \tableofcontents
+\end{frame}
+
+% Section 1: The Problem
+\section{The Problem}
+\begin{frame}{The Problem: Static vs. Dynamic}
+    \begin{itemize}
+        \item \textbf{Embedded Systems (RTOS):}
+        \begin{itemize}
+            \item Highly efficient, deterministic.
+            \item \textbf{Static:} Monolithic firmware. Adding a feature requires recompiling and reflashing the entire OS.
+            \item "OTA Updates" replace the whole image.
+        \end{itemize}
+        \vspace{0.5cm}
+        \item \textbf{General Purpose OS (Linux):}
+        \begin{itemize}
+            \item Dynamic. Applications are separate binaries.
+            \item Can load/unload code at runtime (`exec`).
+            \item Requires \textbf{MMU} (Memory Management Unit) and significant RAM.
+        \end{itemize}
+        \vspace{0.5cm}
+        \item \textbf{The Gap:} Modern IoT (Edge Computing, C2, Drones) needs the dynamism of Linux on the hardware constraints of an MCU.
+    \end{itemize}
+\end{frame}
+
+% Section 2: The Solution
+\section{The Solution}
+\begin{frame}{The Solution: A Thin Linux Compatibility Layer}
+    \begin{block}{Architecture: The Unikernel Model}
+        Instead of running a full kernel, we implement a \textbf{Library OS} that translates Linux System Calls into ESP-IDF primitives.
+    \end{block}
+
+    \begin{itemize}
+        \item \textbf{No-MMU Constraint:} We cannot implement `fork()` or virtual memory.
+        \item \textbf{Single Address Space:} The Kernel and Guest App share the same physical RAM.
+        \item \textbf{ELF Loader:} A custom loader parses standard `.elf` binaries, allocates IRAM (Instruction RAM) for code, and performs \textit{Xtensa-specific relocations} at load time.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{System Architecture}
+    \begin{center}
+    % Conceptual Diagram
+    \texttt{
+    [ Guest ELF Application ] (printf, open, socket)\\\n             |\\
+             v\\
+    [ Syscall Shim Layer ] (Path Translation, Errno)\\\n             |\\
+             v\\
+    [ ESP-IDF / FreeRTOS ] (LwIP, VFS, Drivers)\\\n             |\\
+             v\\
+    [ ESP32 Hardware ]
+    }
+    \end{center}
+\end{frame}
+
+% Section 3: Demo 1
+\section{Demo 1: Distributed C2 Botnet}
+\begin{frame}{Demo 1: Distributed Command & Control}
+    \begin{block}{Scenario}
+        An "Attacker" sends a compiled binary payload to an edge node (ESP32) over the network. The node executes it immediately and streams output back.
+    \end{block}
+
+    \begin{columns}
+        \column{0.5\textwidth}
+        \textbf{Workflow:}
+        \begin{enumerate}
+            \item Master sends ELF Header + Data via TCP.
+            \item ESP32 saves to `/linux/payload.elf`.
+            \item \textbf{Redirection Shim:} `dup2(socket, stdout)` allows `printf` to stream over WiFi.
+            \item `execve()` spawns a new task.
+        \end{enumerate}
+
+        \column{0.5\textwidth}
+        \textbf{Key Tech:}
+        \begin{itemize}
+            \item \textbf{shim\_write:} Intercepts FD 1 (stdout) and dual-routes data to UART and TCP.
+            \item \textbf{Spawn Model:} Simulates `fork+exec` using `xTaskCreate`.
+        \end{itemize}
+    \end{columns}
+\end{frame}
+
+% Section 4: Demo 2
+\section{Demo 2: Collision Avoidance}
+\begin{frame}{Demo 2: Cyber-Physical System (V2X)}
+    \begin{block}{Scenario}
+        An Edge-OS Collision Avoidance System. A Linux app performs real-time vector math to detect crashes and triggers hardware alarms.
+    \end{block}
+
+    \begin{itemize}
+        \item \textbf{Telemetry Bridge:} Web Dashboard sends JSON (GPS, Speed) $\rightarrow$ ESP32 $\rightarrow$ UDP $\rightarrow$ Linux App.
+        \item \textbf{Vector Math (User Space):}
+        $$ \vec{V}_{rel} = \vec{V}_{target} - \vec{V}_{ego} $$
+        $$ TTC = \frac{|\vec{P}_{target} - \vec{P}_{ego}|}{|\vec{V}_{rel}|} $$
+        \item \textbf{Hardware Abstraction (Kernel Space):}
+        \begin{itemize}
+            \item App writes to `/dev/buzzer`.
+            \item Custom VFS Driver translates `write()` to `ledc_set_duty()` (PWM).
+        \end{itemize}
+    \end{itemize}
+\end{frame}
+
+% Conclusion
+\section{Conclusion}
+\begin{frame}{Conclusion & Future Work}
+    \begin{itemize}
+        \item \textbf{Achievement:} Successfully implemented a POSIX-compliant runtime on ESP32 capable of running standard C applications.
+        \item \textbf{Impact:} Enables "Write Once, Run Anywhere" for IoT edge logic without firmware reflashing.
+        \item \textbf{Future Work:}
+        \begin{itemize}
+            \item Implement `setjmp`/`longjmp` for fuller signal handling.
+            \item Add support for dynamic shared libraries (`.so`).
+            \item Port a lightweight scripting language (Lua/MicroPython) as a guest app.
+        \end{itemize}
+    \end{itemize}
+\end{frame}
+
+\end{document}

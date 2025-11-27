@@ -1,0 +1,217 @@
+\documentclass[aspectratio=169]{beamer}
+
+% Theme and Color
+\usetheme{Madrid}
+\usecolortheme{beaver}
+\setbeamerfont{title}{size=\large,series=\bfseries}
+\setbeamerfont{subtitle}{size=\normalsize}
+
+% Packages
+\usepackage{tikz}
+\usetikzlibrary{shapes,arrows,positioning,calc}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{amsmath}
+
+% Metadata
+\title[ESP32 Unikernel & POSIX Layer]{Architecting a POSIX-Compliant Runtime Environment on ESP32}
+\subtitle{A Unikernel Approach to Dynamic ELF Execution without MMU}
+\author{Dhruv}
+\institute[Embedded Systems Lab]{
+    Department of Computer Science & Engineering\\
+    Embedded Systems Laboratory
+}
+\date{\today}
+
+\begin{document}
+
+%---------------------------------------------------------
+% Slide 1: Title
+%---------------------------------------------------------
+\begin{frame}
+    \titlepage
+\end{frame}
+
+%---------------------------------------------------------
+% Slide 2: The Problem Space
+%---------------------------------------------------------
+\section{Introduction}
+\begin{frame}{The Embedded-General Purpose Dichotomy}
+    \begin{columns}
+        \column{0.5\textwidth}
+        \textbf{Embedded Systems (RTOS)}
+        \begin{itemize}
+            \item \textcolor{red}{Static Linkage:} Monolithic firmware blob.
+            \item \textcolor{green}{Deterministic:} Real-time guarantees.
+            \item \textbf{Constraint:} Updating logic requires reflashing the entire OS.
+        \end{itemize}
+
+        \column{0.5\textwidth}
+        \textbf{General Purpose OS (Linux)}
+        \begin{itemize}
+            \item \textcolor{green}{Dynamic:} Processes loaded at runtime.
+            \item \textcolor{green}{Decoupled:} App is separate from Kernel.
+            \item \textbf{Constraint:} Requires \textbf{MMU} (Memory Management Unit) for Virtual Memory.
+        \end{itemize}
+    \end{columns}
+
+    \vspace{1cm}
+    \begin{alertblock}{The Research Question}
+        Can we achieve the \textbf{dynamism} of Linux on an MCU that lacks an MMU (ESP32), while maintaining the efficiency of an RTOS?
+    \end{alertblock}
+\end{frame}
+
+%---------------------------------------------------------
+% Slide 3: The Solution - Unikernel Architecture
+%---------------------------------------------------------
+\section{Architecture}
+\begin{frame}{The Solution: A Library OS / Unikernel}
+    \begin{center}
+    \begin{tikzpicture}[node distance=1.5cm, auto]
+        % Nodes
+        \node (hardware) [draw, fill=gray!20, minimum width=8cm, minimum height=1cm] {ESP32 Hardware (No MMU)};
+        \node (kernel) [draw, fill=blue!20, minimum width=8cm, minimum height=1cm, above=of hardware] {Firmware (FreeRTOS + LwIP + VFS)};
+        \node (shim) [draw, fill=orange!20, minimum width=8cm, minimum height=0.8cm, above=0cm of kernel] {Syscall Shim Layer (Path Translation, Errno)};
+        \node (app) [draw, fill=green!20, minimum width=6cm, minimum height=1cm, above=0.5cm of shim] {Guest ELF Application (.text / .data)};
+        
+        % Arrows
+        \draw[->, thick] (app) -- node[right] {Direct Function Calls (Dynamic Linking)} (shim);
+    \end{tikzpicture}
+    \end{center}
+
+    \begin{itemize}
+        \item \textbf{Single Address Space:} Kernel and App share physical RAM.
+        \item \textbf{Runtime Linking:} Symbols resolved at load time (no traps/interrupts).
+        \item \textbf{Hardware Abstraction:} POSIX APIs (`open`, `read`, `socket`) mapped to RTOS primitives.
+    \end{itemize}
+\end{frame}
+
+%---------------------------------------------------------
+% Slide 4: Memory & Loader Constraints
+%---------------------------------------------------------
+\begin{frame}{The No-MMU Constraint: Memory Model}
+    \textbf{The Harvard Architecture Challenge:}
+    \begin{itemize}
+        \item \textbf{IRAM (Instruction RAM):} Only executable region. Not coherent with Data Bus.
+        \item \textbf{DRAM (Data RAM):} Read/Write only. Non-executable.
+    \end{itemize}
+
+    \vspace{0.5cm}
+    \textbf{The ELF Loader Pipeline:}
+    \begin{enumerate}
+        \item \textbf{Parse:} Identify `PT_LOAD` segments.
+        \item \textbf{Allocate:} 
+            \begin{itemize}
+                \item Code $\rightarrow$ `heap_caps_malloc(MALLOC_CAP_EXEC)`
+                \item Data $\rightarrow$ `heap_caps_malloc(MALLOC_CAP_8BIT)`
+            \end{itemize}
+        \item \textbf{Relocate:} Patch instructions (`R_XTENSA_SLOT0_OP`) for Position Independence (PIC).
+        \item \textbf{Sync:} Flush D-Cache, Invalidate I-Cache (Critical safety step).
+    \end{enumerate}
+\end{frame}
+
+%---------------------------------------------------------
+% Slide 5: System Call Shims
+%---------------------------------------------------------
+\section{Implementation}
+\begin{frame}[fragile]{System Call Shim Implementation}
+    The Guest App believes it is on Linux. The Shim translates reality.
+
+    \begin{columns}
+        \column{0.5\textwidth}
+        \textbf{Filesystem Shim:}
+        \begin{itemize}
+            \item Guest: \texttt{open("/log.txt")}
+            \item Shim: Translates to \texttt{/linux/log.txt}
+            \item \textbf{Permission Spoofing:} LittleFS lacks permissions. Shim fakes \texttt{0777} (RWX) in \texttt{stat()}.
+        \end{itemize}
+
+        \column{0.5\textwidth}
+        \textbf{Stdout Redirection (C2):}
+        \begin{itemize}
+            \item \textbf{Problem:} FD 1 is hardwired to UART.
+            \item \textbf{Solution:} Global State Interception.
+            \item `shim_write` detects redirection flag.
+            \item Dual-routes data to UART \textbf{and} Network Socket.
+        \end{itemize}
+    \end{columns}
+\end{frame}
+
+%---------------------------------------------------------
+% Slide 6: Demo 1 - C2
+%---------------------------------------------------------
+\section{Case Study 1}
+\begin{frame}{Demo 1: Distributed Command & Control}
+    \textbf{Scenario:} An ephemeral execution node receiving logic over the wire.
+
+    \begin{enumerate}
+        \item \textbf{Master (Python):} Connects TCP Port 9000. Sends Header + ELF Binary.
+        \item \textbf{Node (ESP32):} 
+            \begin{itemize}
+                \item Streams binary to filesystem.
+                \item Invokes ELF Loader.
+                \item Sets `g_c2_redirect_state`.
+            \end{itemize}
+        \item \textbf{Execution:} Payload runs `printf`. Shim intercepts and `send()`s back to Master.
+        \item \textbf{Result:} Remote code execution with real-time I/O streaming.
+    \end{enumerate}
+\end{frame}
+
+%---------------------------------------------------------
+% Slide 7: Demo 2 - V2X
+%---------------------------------------------------------
+\section{Case Study 2}
+\begin{frame}{Demo 2: Cyber-Physical System (V2X)}
+    \textbf{Scenario:} Edge-OS Collision Avoidance using User-Space Math and Kernel-Space Drivers.
+
+    \begin{columns}
+        \column{0.6\textwidth}
+        \textbf{Mathematical Model (User Space):}
+        \begin{equation*}
+            \vec{P}_{rel} = \vec{P}_{target} - \vec{P}_{ego}
+        \end{equation*}
+        \begin{equation*}
+            \vec{V}_{rel} = \vec{V}_{target} - \vec{V}_{ego}
+        \end{equation*}
+        \begin{equation*}
+            TTC = \frac{|\vec{P}_{rel}|}{|\vec{V}_{rel}|}
+        \end{equation*}
+        
+        \column{0.4\textwidth}
+        \textbf{Driver Model (Kernel):}
+        \begin{itemize}
+            \item `\texttt{/dev/buzzer}`
+            \item `ioctl(fd, FREQ, 440)`
+            \item `write(fd, "1")`
+        \end{itemize}
+    \end{columns}
+
+    \vspace{0.5cm}
+    \textbf{Architecture:}
+    Web Dashboard (JSON) $\rightarrow$ Telemetry Bridge (UDP) $\rightarrow$ Linux App $\rightarrow$ VFS Driver $\rightarrow$ GPIO.
+\end{frame}
+
+%---------------------------------------------------------
+% Slide 8: Conclusion
+%---------------------------------------------------------
+\section{Conclusion}
+\begin{frame}{Conclusion & Future Work}
+    \begin{block}{Achievement}
+        We have successfully decoupled Application Logic from Firmware on a Microcontroller.
+    \end{block}
+
+    \textbf{Key Contributions:}
+    \begin{itemize}
+        \item \textbf{Dynamic Loading:} Running compiled C code from Flash/RAM.
+        \item \textbf{POSIX Layer:} Running standard network/file apps unmodified.
+        \item \textbf{Hardware Abstraction:} UNIX-style `/dev/` driver model.
+    \end{itemize}
+
+    \textbf{Future Directions:}
+    \begin{itemize}
+        \item \textbf{Security:} Implementing Memory Protection Units (MPU) regions for fault isolation.
+        \item \textbf{Shared Libraries:} Supporting `.so` dynamic linking.
+    \end{itemize}
+\end{frame}
+
+\end{document}

@@ -22,6 +22,7 @@ EXPORT_SYMBOLS = [
     ("shim_fopen", "fopen"),
     ("shim_printf", "printf"),  # Intercept printf for C2 stdout redirection
     ("shim_puts", "puts"),      # Intercept puts for C2 stdout redirection
+    ("shim_fgets", "fgets"),    # Intercept fgets for C2 stdin redirection (if needed)
     "fprintf",
     "fclose",
     "fread",

@@ -65,9 +65,21 @@ Guest calls: printf("Hello")
 ### Key Data Structures
 
 ```c
-// In shim_unistd.c
-static bool s_c2_redirect_stdout = false;  // Is stdout redirected?
-static bool s_c2_redirect_stderr = false;  // Is stderr redirected?
+// In shim_unistd.c - Shared state structure
+typedef struct {
+    int socket_fd;           // TCP socket for C2 master
+    bool redirect_stdout;    // Enable stdout redirection
+    bool redirect_stderr;    // Enable stderr redirection
+} c2_redirect_state_t;
+
+static c2_redirect_state_t s_c2_state = {
+    .socket_fd = -1,
+    .redirect_stdout = false,
+    .redirect_stderr = false,
+};
+
+// Public pointer to state (guest apps modify via pointer)
+c2_redirect_state_t *g_c2_redirect_state = &s_c2_state;
 
 // In vfs_c2_pipe.c
 typedef struct {
@@ -115,14 +127,24 @@ int shim_dup2(int oldfd, int newfd) {
     // Configure C2 pipe with the socket
     c2_pipe_set_socket(oldfd);
 
+    // CRITICAL: Set socket_fd in shared state
+    // This ensures shim_puts/shim_printf can access the socket
+    g_c2_redirect_state->socket_fd = oldfd;
+
     // Mark stream as redirected
-    if (newfd == STDOUT_FILENO) s_c2_redirect_stdout = true;
-    if (newfd == STDERR_FILENO) s_c2_redirect_stderr = true;
+    if (newfd == STDOUT_FILENO) {
+        g_c2_redirect_state->redirect_stdout = true;
+    }
+    if (newfd == STDERR_FILENO) {
+        g_c2_redirect_state->redirect_stderr = true;
+    }
 
     // Return newfd (POSIX-compliant)
     return newfd;
 }
 ```
+
+**Critical Fix:** Previously, `shim_dup2()` called `c2_pipe_set_socket()` but did not set `g_c2_redirect_state->socket_fd`. This caused `shim_puts` and `shim_printf` to see `socket_fd = -1` and fail to send output to the socket. The fix ensures the socket FD is stored in the shared state structure.
 
 ## Symbols Exported
 

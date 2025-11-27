@@ -87,7 +87,9 @@ ESP-IDF uses LwIP (Lightweight IP) as its networking stack, which provides a BSD
 As established, "processes" are emulated as FreeRTOS tasks.
 
 * **fork():** This is explicitly **not supported** due to the lack of MMU (no CoW). The shim should return \-1 and set errno to ENOSYS or ENOMEM.  
-* **execve(path, argv, envp):** This is the trigger for the ELF Loader. When the app calls execve, the shim pauses the current execution, parses the binary at path, loads it, and effectively replaces the current task's execution context with the new entry point. In a "spawn" model, it might instead create a *new* task and wait for it.  
+* **execve(path, argv, envp):** This is the trigger for the ELF Loader. When the app calls execve, the shim creates a new FreeRTOS task to execute the ELF binary (spawn model). The shim tracks the spawned process for synchronization via waitpid. The parent process can continue execution while the child runs in parallel.  
+* **waitpid(pid, status, options):** Waits for a child process spawned via execve to complete. Supports `pid == -1` to wait for any child. Blocks until the child signals completion via semaphore, then returns the exit status. Essential for proper parent-child synchronization in the spawn model.  
+* **wait(status):** Simplified version that waits for any child process.  
 * **getpid():** Returns the TaskHandle\_t cast to an integer.  
 * **kill(pid, sig):** Maps to vTaskDelete (for SIGKILL). Signal handling (SIGINT, SIGTERM) can be emulated using FreeRTOS Task Notifications. The shim registers a callback that checks task notifications at safe points and invokes the app's signal handler if one is pending.2
 
@@ -323,7 +325,9 @@ project\_root/
 | **Net** | socket | lwip\_socket | Medium | Must translate return errors to errno. |
 | **Net** | dup2 | **None** | Very High | Requires custom VFS pipe implementation. |
 | **Proc** | fork | **None** | N/A | Not supported. Use spawn model. |
-| **Proc** | execve | elf\_loader\_run | High | Handles loading, linking, and task creation. |
+| **Proc** | execve | elf\_loader\_run | High | Handles loading, linking, and task creation. Spawns new FreeRTOS task. |
+| **Proc** | waitpid | FreeRTOS semaphores | High | Tracks child processes, waits for completion, returns exit status. |
+| **Proc** | wait | waitpid wrapper | Medium | Simplified interface to wait for any child. |
 | **Mem** | sbrk | pvPortMalloc | Low | Map to system heap. |
 
 #### **Works cited**

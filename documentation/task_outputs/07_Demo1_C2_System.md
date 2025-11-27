@@ -123,90 +123,128 @@ ESP32 C2 Server Task
 
 ### Modified Files
 
-#### `main/c2_server.c` (NEW - 200 lines)
+#### `apps/c2_bot/main.c` (Guest ELF Application)
 ```c
-// Global C2 socket for stdout redirection
-int g_c2_socket_fd = -1;
+// C2 Bot is now a guest ELF application (not firmware task)
+// Uses POSIX APIs exclusively
 
-// Protocol handler
-static int c2_receive_payload(int client_sock)
+static void c2_handle_client(int client_sock)
 {
-    // 1. Receive size header
-    // 2. Open /linux/payload.elf
-    // 3. Stream binary data in chunks
-    // 4. Validate and log progress
+    // 1. Receive payload and save to /linux/payload.elf
+    c2_receive_payload(client_sock);
+    
+    // 2. Redirect stdout/stderr to socket using POSIX dup2()
+    dup2(client_sock, STDOUT_FILENO);
+    dup2(client_sock, STDERR_FILENO);
+    
+    // 3. Execute payload using execve (spawn model)
+    char *argv[] = { "payload.elf", 0 };
+    execve("/linux/payload.elf", argv, 0);
+    
+    // 4. Wait for payload to complete using waitpid
+    int status = 0;
+    waitpid(-1, &status, 0);  // Wait for any child
+    
+    // 5. Close socket after payload completes
+    close(client_sock);
 }
 
-// Client handler
-static void c2_handle_client(int client_sock, struct sockaddr_in *client_addr)
-{
-    // Receive payload
-    // Configure stdout redirection
-    // Execute ELF
-    // Cleanup
-}
-
-// Server task
-static void c2_server_task(void *pvParameters)
+int app_main(int argc, char *argv[])
 {
     // Create listening socket on port 9000
     // Accept clients in loop
-}
-
-// Initialization
-void c2_server_start(void)
-{
-    xTaskCreate(c2_server_task, ...);
+    // Handle each client with c2_handle_client()
 }
 ```
 
-#### `main/c2_server.h` (NEW - 35 lines)
-- Public API for C2 server
-- Declares `c2_server_start()` and `g_c2_socket_fd`
-- Includes usage documentation
-
-#### `main/main.c` (MODIFIED)
-```c
-#define ENABLE_C2_SERVER true        // NEW: C2 mode configuration
-#define USE_SDCARD_FILESYSTEM false  // Keep LittleFS for QEMU
-
-void app_main(void)
-{
-    // ... driver initialization ...
-
-#if ENABLE_C2_SERVER
-    // Start C2 server in background
-    c2_server_start();
-
-    // Main task idles and lets C2 server handle clients
-    while (1) {
-        vTaskDelay(pdMS_TO_TICKS(10000));
-    }
-#else
-    // Non-C2 mode: run default ELF (preserved)
-#endif
-}
-```
+**Key Changes from Firmware-Based Version:**
+- C2 bot is now a guest ELF application, not a FreeRTOS task
+- Uses POSIX `execve()` and `waitpid()` instead of direct ELF loader calls
+- Uses `dup2()` for stdout redirection (POSIX-compliant)
+- Can be updated independently of firmware
 
 #### `main/syscalls/shim_unistd.c` (MODIFIED)
 ```c
-// Made these non-static so c2_server.c can modify them
-bool s_c2_redirect_stdout = false;
-bool s_c2_redirect_stderr = false;
+// Shared C2 redirection state (allocated once, pointer is stable)
+typedef struct {
+    int socket_fd;
+    bool redirect_stdout;
+    bool redirect_stderr;
+} c2_redirect_state_t;
 
-// shim_write() already checks these flags and dual-routes output
+static c2_redirect_state_t s_c2_state = {
+    .socket_fd = -1,
+    .redirect_stdout = false,
+    .redirect_stderr = false,
+};
+
+// Public pointer to state (guest apps modify via pointer)
+c2_redirect_state_t *g_c2_redirect_state = &s_c2_state;
+
+// shim_dup2() sets both flags AND socket_fd
+int shim_dup2(int oldfd, int newfd)
+{
+    // Configure C2 pipe
+    c2_pipe_set_socket(oldfd);
+    
+    // CRITICAL: Set socket_fd in shared state
+    g_c2_redirect_state->socket_fd = oldfd;
+    
+    // Mark which stream is redirected
+    if (newfd == STDOUT_FILENO) {
+        g_c2_redirect_state->redirect_stdout = true;
+    }
+    if (newfd == STDERR_FILENO) {
+        g_c2_redirect_state->redirect_stderr = true;
+    }
+    return newfd;
+}
+
+// shim_write() checks state and dual-routes output
 ssize_t shim_write(int fd, const void *buf, size_t count)
 {
-    if (fd == STDOUT_FILENO && s_c2_redirect_stdout) {
+    bool is_c2_redirect = (fd == STDOUT_FILENO && g_c2_redirect_state->redirect_stdout) ||
+                          (fd == STDERR_FILENO && g_c2_redirect_state->redirect_stderr);
+
+    if (is_c2_redirect && g_c2_redirect_state->socket_fd >= 0) {
         // Write to UART
         write(fd, buf, count);
-
-        // Also send to C2 socket if connected
-        if (g_c2_socket_fd >= 0) {
-            send(g_c2_socket_fd, buf, count, MSG_DONTWAIT);
-        }
+        // Also send to C2 socket
+        send(g_c2_redirect_state->socket_fd, buf, count, MSG_DONTWAIT);
+        return count;
     }
-    // ... rest of function
+    // ... normal write path
+}
+```
+
+#### `main/syscalls/shim_process.c` (MODIFIED)
+```c
+// Process tracking for waitpid support
+typedef struct child_process {
+    pid_t pid;
+    TaskHandle_t task_handle;
+    SemaphoreHandle_t completion_sem;
+    int exit_status;
+    bool completed;
+    struct child_process *next;
+} child_process_t;
+
+// execve() now tracks spawned processes
+int shim_execve(const char *path, char *const argv[], char *const envp[])
+{
+    // ... create task ...
+    // Add to child process tracking list
+    add_child_process(child_pid, task_handle);
+    // ...
+}
+
+// waitpid() waits for child to complete
+pid_t shim_waitpid(pid_t pid, int *status, int options)
+{
+    // Find child process
+    // Wait on completion semaphore
+    // Return exit status
+    // Clean up child entry
 }
 ```
 
@@ -408,10 +446,11 @@ Payload execution complete.
 - Configured automatically by `build_and_run.py --c2`
 - Single client at a time (server is blocking)
 
-### Single-Process Model
-- C2 payload runs in main task context
-- stdout redirection affects only that payload
-- Next payload execution resets state
+### Spawn Model with waitpid
+- C2 payload runs in separate FreeRTOS task (spawned by `execve`)
+- Parent process (C2 bot) uses `waitpid()` to wait for completion
+- Socket connection remains open until payload finishes
+- Ensures all output is captured before connection closes
 
 ### Network Stack
 - Requires LwIP and NVS initialization
