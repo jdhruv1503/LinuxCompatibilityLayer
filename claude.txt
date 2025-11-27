@@ -1,0 +1,307 @@
+D (2055) cpu_start: calling init function: 0x400d3648 on core: 0
+D (2057) cpu_start: calling init function: 0x4010ee90
+D (2061) cpu_start: calling init function: 0x400ef484
+D (2062) cpu_start: calling init function: 0x4008622c
+D (2064) cpu_start: calling init function: 0x400d4b54
+D (2066) cpu_start: calling init function: 0x400d40b4
+D (2068) cpu_start: calling init function: 0x400edd10 on core: 0
+D (2071) intr_alloc: Connected src 17 to int 2 (cpu 0)
+D (2073) cpu_start: calling init function: 0x401287b0 on core: 0
+D (2075) cpu_start: calling init function: 0x400d3b10 on core: 0
+D (2080) intr_alloc: Connected src 24 to int 3 (cpu 0)
+D (2082) app_start: Starting scheduler on CPU0
+I (2086) main_task: Started on CPU0
+D (2086) intr_alloc: Connected src 25 to int 1 (cpu 1)
+D (2086) app_start: Starting scheduler on CPU1
+D (2086) heap_init: New heap initialised at 0x3ffe0440
+D (2086) heap_init: New heap initialised at 0x3ffe4350
+D (2096) intr_alloc: Connected src 16 to int 5 (cpu 0)
+I (2096) main_task: Calling app_main()
+I (2096) kernel_main: ============================================
+I (2096) kernel_main:   Linux Compatibility Layer - ESP32
+I (2096) kernel_main:   ELF Loader Subsystem v2.0
+I (2096) kernel_main: ============================================
+I (2106) kernel_main: Initializing driver subsystem...
+D (2446) esp_netif_lwip: LwIP stack has been initialized
+D (2456) esp_netif_lwip: esp-netif has been successfully initialized
+D (2456) event: running task for loop 0x3ffba6a0
+D (2456) event: created task for loop 0x3ffba6a0
+D (2456) event: created event loop 0x3ffba6a0
+D (2456) esp_netif_lwip: check: remote, if=0x3ffb7780 fn=0x4010cf98
+D (2456) esp_netif_objects: esp_netif_add_to_list_unsafe netif added successfully (total netifs: 1)
+D (2466) esp_netif_lwip: call api in lwip: ret=0x0, give sem
+D (2466) intr_alloc: Connected src 38 to int 8 (cpu 0)
+D (2476) efuse: BLK0 REG2 [8-15], len=8 bits
+D (2476) efuse: BLK0 REG2 [0-7], len=8 bits
+D (2476) efuse: BLK0 REG1 [24-31], len=8 bits
+D (2476) efuse: BLK0 REG1 [16-23], len=8 bits
+D (2476) efuse: BLK0 REG1 [8-15], len=8 bits
+D (2476) efuse: BLK0 REG1 [0-7], len=8 bits
+D (2476) efuse: BLK0 REG2 [16-23], len=8 bits
+D (2476) eth_phy_802_3: Found PHY address: 1
+D (2506) esp_eth: new ethernet driver @0x3ffbe9cc
+I (2506) esp_eth.netif.netif_glue: 00:00:00:00:00:03
+D (2506) esp_netif_lwip: check: remote, if=0x3ffbb5e0 fn=0x4010c770
+D (2506) esp_netif_lwip: call api in lwip: ret=0x0, give sem
+I (2506) esp_eth.netif.netif_glue: ethernet attached to netif
+D (2616) event: running post ETH_EVENT:0 with handler 0x400de084 and context 0x3ffbea8c on loop 0x3ffba6a0
+D (2616) esp_eth.netif.netif_glue: eth_action_start: 0x3ffbea44, 0x3f406278, 0, 0x3ffbeb5c, 0x3ffbe9cc
+D (2616) esp_netif_handlers: esp_netif action has started with netif0x3ffbb5e0 from event_id=0
+D (2616) esp_netif_lwip: check: remote, if=0x3ffbb5e0 fn=0x4010d1bc
+D (2626) esp_netif_lwip: esp_netif_start_api 0x3ffbb5e0
+D (2646) esp_netif_lwip: esp_netif_get_hostname esp_netif:0x3ffbb5e0
+D (2716) esp_netif_lwip: call api in lwip: ret=0x0, give sem
+D (2766) event: running post ETH_EVENT:2 with handler 0x400ddff4 and context 0x3ffbeaec on loop 0x3ffba6a0
+D (2766) esp_eth.netif.netif_glue: eth_action_connected: 0x3ffbea44, 0x3f406278, 2, 0x3ffbeb6c, 0x3ffbe9cc
+D (2766) esp_netif_handlers: esp_netif action connected with netif0x3ffbb5e0 from event_id=2
+D (2766) esp_netif_lwip: check: remote, if=0x3ffbb5e0 fn=0x4010d3dc
+D (2776) esp_netif_lwip: esp_netif_up_api esp_netif:0x3ffbb5e0
+D (2816) esp_netif_lwip: call api in lwip: ret=0x0, give sem
+D (2866) esp_netif_lwip: check: remote, if=0x3ffbb5e0 fn=0x4010cc04
+D (2866) esp_netif_lwip: esp_netif_dhcpc_start_api esp_netif:0x3ffbb5e0
+D (2926) esp_netif_lwip: esp_netif_start_ip_lost_timer esp_netif:0x3ffbb5e0
+D (2996) esp_netif_lwip: if0x3ffbb5e0 start ip lost tmr: interval=120
+D (3046) esp_netif_lwip: starting dhcp client
+D (3146) esp_netif_lwip: call api in lwip: ret=0x0, give sem
+I (4146) vfs_c2_pipe: Registered /dev/c2 pipe driver
+I (4186) kernel_main: Files in /linux:
+D (4346) esp_netif_lwip: esp_netif_internal_dhcpc_cb lwip-netif:0x3ffbb66c
+D (4356) esp_netif_lwip: check: local, if=0x3ffbb5e0 fn=0x4010d7c0
+D (4356) esp_netif_lwip: esp_netif_update_default_netif_lwip 0x3ffbb5e0
+D (4356) esp_netif_lwip: if0x3ffbb5e0 ip changed=1
+D (4356) event: running post IP_EVENT:4 with handler 0x400dc38c and context 0x3ffbb7e4 on loop 0x3ffba6a0
+D (4366) event: running post IP_EVENT:4 with handler 0x400ddf84 and context 0x3ffbeb3c on loop 0x3ffba6a0
+D (4366) esp_eth.netif.netif_glue: eth_action_got_ip: 0x3ffbea44, 0x3f41364c, 4, 0x3ffbf63c, 0x3ffbb5e0
+D (4366) esp_netif_handlers: esp_netif action got_ip with netif0x3ffbb5e0 from event_id=4
+I (4366) esp_netif_handlers: eth ip: 10.0.2.15, mask: 255.255.255.0, gw: 10.0.2.2
+I (4366) kernel_main:   .placeholder
+I (4466) kernel_main:   c2_bot.elf
+I (4546) kernel_main:   c2_payload.elf
+I (4636) kernel_main:   c2_redirect.elf
+I (4726) kernel_main:   collision_guard.elf
+I (4796) kernel_main:   collision_server.elf
+I (4866) kernel_main:   dup2_test.elf
+I (4936) kernel_main:   hello_world.elf
+I (4996) kernel_main:   index.html
+I (5056) kernel_main:   map_reduce_worker.elf
+I (5116) kernel_main:   math_worker.elf
+I (5166) kernel_main:   tcp_client.elf
+I (5226) kernel_main:   test_fs.elf
+I (5406) kernel_main: Found ELF: /linux/collision_server.elf
+I (5506) kernel_main: Loading ELF: /linux/collision_server.elf
+I (5506) ELF: ELF loader version: 1.1.1
+I (5826) kernel_main: ELF file size: 6940 bytes
+D (5876) ELF: .text   sec addr=0x00000764 size=0x00000b80 offset=0x00000764
+D (5886) ELF: .text   offset is 0x764 size is 0xb80
+D (5886) ELF: .rodata sec addr=0x000012e4 size=0x00000532 offset=0x000012e4
+D (5886) ELF: .rodata offset is 0x12e4 size is 0x532
+D (5886) ELF: .data   sec addr=0x000028e4 size=0x00000004 offset=0x000018e4
+D (5886) ELF: .data   offset is 0x18e4 size is 0x4
+D (5896) ELF: .bss    sec addr=0x000028e8 size=0x00003018 offset=0x000018e8
+D (5896) ELF: .bss    offset is 0x18e8 size is 0x3018
+I (5896) ELF: elf->entry=0x4008f084
+
+D (5906) ELF: Section .rela.dyn has 57 symbol tables
+D (5906) elf_arch: type: 5, where=0x4008ed40 addr=0x0 offset=0x7d4
+
+D (5906) elf_arch: type: 5, where=0x4008ed44 addr=0x0 offset=0x7d8
+
+D (5906) elf_arch: type: 5, where=0x4008ed48 addr=0x0 offset=0x7dc
+
+D (5906) elf_arch: type: 5, where=0x4008ed4c addr=0x0 offset=0x7e0
+
+D (5906) elf_arch: type: 5, where=0x4008ed54 addr=0x0 offset=0x7e8
+
+D (5906) elf_arch: type: 5, where=0x4008ed58 addr=0x0 offset=0x7ec
+
+D (5916) elf_arch: type: 5, where=0x4008ed5c addr=0x0 offset=0x7f0
+
+D (5916) elf_arch: type: 5, where=0x4008ed64 addr=0x0 offset=0x7f8
+
+D (5916) elf_arch: type: 5, where=0x4008ed68 addr=0x0 offset=0x7fc
+
+D (5916) elf_arch: type: 5, where=0x4008ed6c addr=0x0 offset=0x800
+
+D (5916) elf_arch: type: 5, where=0x4008ed74 addr=0x0 offset=0x808
+
+D (5916) elf_arch: type: 5, where=0x4008ed7c addr=0x0 offset=0x810
+
+D (5916) elf_arch: type: 5, where=0x4008ed84 addr=0x0 offset=0x818
+
+D (5926) elf_arch: type: 5, where=0x4008ed88 addr=0x0 offset=0x81c
+
+D (5926) elf_arch: type: 5, where=0x4008ed8c addr=0x0 offset=0x820
+
+D (5926) elf_arch: type: 5, where=0x4008ed90 addr=0x0 offset=0x824
+
+D (5926) elf_arch: type: 5, where=0x4008ed94 addr=0x0 offset=0x828
+
+D (5926) elf_arch: type: 5, where=0x4008ed98 addr=0x0 offset=0x82c
+
+D (5926) elf_arch: type: 5, where=0x4008eda0 addr=0x0 offset=0x834
+
+D (5926) elf_arch: type: 5, where=0x4008eda4 addr=0x0 offset=0x838
+
+D (5936) elf_arch: type: 5, where=0x4008eda8 addr=0x0 offset=0x83c
+
+D (5936) elf_arch: type: 5, where=0x4008edb4 addr=0x0 offset=0x848
+
+D (5936) elf_arch: type: 5, where=0x4008edb8 addr=0x0 offset=0x84c
+
+D (5936) elf_arch: type: 5, where=0x4008edbc addr=0x0 offset=0x850
+
+D (5936) elf_arch: type: 5, where=0x4008edcc addr=0x0 offset=0x860
+
+D (5936) elf_arch: type: 5, where=0x4008edd4 addr=0x0 offset=0x868
+
+D (5936) elf_arch: type: 5, where=0x4008edd8 addr=0x0 offset=0x86c
+
+D (5936) elf_arch: type: 5, where=0x4008edec addr=0x0 offset=0x880
+
+D (5946) elf_arch: type: 5, where=0x4008edf0 addr=0x0 offset=0x884
+
+D (5946) elf_arch: type: 5, where=0x4008edf8 addr=0x0 offset=0x88c
+
+D (5946) elf_arch: type: 5, where=0x4008ee00 addr=0x0 offset=0x894
+
+D (5946) elf_arch: type: 5, where=0x4008ee04 addr=0x0 offset=0x898
+
+D (5946) elf_arch: type: 5, where=0x4008ee08 addr=0x0 offset=0x89c
+
+D (5946) elf_arch: type: 5, where=0x4008ee10 addr=0x0 offset=0x8a4
+
+D (5956) elf_arch: type: 5, where=0x4008ee14 addr=0x0 offset=0x8a8
+
+D (5956) elf_arch: type: 5, where=0x4008ee18 addr=0x0 offset=0x8ac
+
+D (5956) elf_arch: type: 5, where=0x4008ee1c addr=0x0 offset=0x8b0
+
+D (5956) elf_arch: type: 5, where=0x4008ee20 addr=0x0 offset=0x8b4
+
+D (5956) elf_arch: type: 5, where=0x4008ee24 addr=0x0 offset=0x8b8
+
+D (5956) elf_arch: type: 5, where=0x4008ee28 addr=0x0 offset=0x8bc
+
+D (5956) elf_arch: type: 5, where=0x4008ee2c addr=0x0 offset=0x8c0
+
+D (5956) elf_arch: type: 5, where=0x4008ee30 addr=0x0 offset=0x8c4
+
+D (5966) elf_arch: type: 5, where=0x4008ee34 addr=0x0 offset=0x8c8
+
+D (5966) elf_arch: type: 5, where=0x4008ee38 addr=0x0 offset=0x8cc
+
+D (5966) elf_arch: type: 5, where=0x4008ee40 addr=0x0 offset=0x8d4
+
+D (5966) elf_arch: type: 5, where=0x4008ee44 addr=0x0 offset=0x8d8
+
+D (5966) elf_arch: type: 5, where=0x4008ee48 addr=0x0 offset=0x8dc
+
+D (5966) elf_arch: type: 5, where=0x4008ee4c addr=0x0 offset=0x8e0
+
+D (5966) elf_arch: type: 5, where=0x4008ee54 addr=0x0 offset=0x8e8
+
+D (5976) elf_arch: type: 5, where=0x4008ee60 addr=0x0 offset=0x8f4
+
+D (5976) elf_arch: type: 5, where=0x4008ee64 addr=0x0 offset=0x8f8
+
+D (5976) elf_arch: type: 5, where=0x4008ee68 addr=0x0 offset=0x8fc
+
+D (5976) elf_arch: type: 5, where=0x4008ee70 addr=0x0 offset=0x904
+
+D (5976) elf_arch: type: 5, where=0x4008ee74 addr=0x0 offset=0x908
+
+D (5976) elf_arch: type: 5, where=0x4008ee78 addr=0x0 offset=0x90c
+
+D (5976) elf_arch: type: 2, where=0x4008ecd0 addr=0x0 offset=0x764
+
+D (5986) elf_arch: type: 2, where=0x4008ecd4 addr=0x0 offset=0x768
+
+D (5986) ELF: Section .rela.plt has 22 symbol tables
+D (5986) ELF: Find function strlen addr=400014c0
+D (5986) elf_arch: type: 4, where=0x4008ed30 addr=0x400014c0 offset=0x7c4
+
+D (5986) ELF: Find function strstr addr=4000c674
+D (5986) elf_arch: type: 4, where=0x4008ed34 addr=0x4000c674 offset=0x7c8
+
+D (5986) ELF: Find function strtod addr=4011641c
+D (5986) elf_arch: type: 4, where=0x4008ed38 addr=0x4011641c offset=0x7cc
+
+D (5996) ELF: Find function __truncdfsf2 addr=40002b90
+D (5996) elf_arch: type: 4, where=0x4008ed3c addr=0x40002b90 offset=0x7d0
+
+D (5996) ELF: Find function puts addr=400daa74
+D (5996) elf_arch: type: 4, where=0x4008ed50 addr=0x400daa74 offset=0x7e4
+
+D (5996) ELF: Find function printf addr=400da9a4
+D (5996) elf_arch: type: 4, where=0x4008ed60 addr=0x400da9a4 offset=0x7f4
+
+D (6006) ELF: Find function open addr=400da6e0
+D (6006) elf_arch: type: 4, where=0x4008ed70 addr=0x400da6e0 offset=0x804
+
+D (6006) ELF: Find function read addr=400da744
+D (6006) elf_arch: type: 4, where=0x4008ed78 addr=0x400da744 offset=0x80c
+
+D (6006) ELF: Find function close addr=400da89c
+D (6006) elf_arch: type: 4, where=0x4008ed80 addr=0x400da89c offset=0x814
+
+D (6006) ELF: Find function socket addr=400dae88
+D (6006) elf_arch: type: 4, where=0x4008ed9c addr=0x400dae88 offset=0x830
+
+D (6016) ELF: Find function setsockopt addr=400daef0
+D (6016) elf_arch: type: 4, where=0x4008edc0 addr=0x400daef0 offset=0x854
+
+D (6016) ELF: Find function bind addr=400daf28
+D (6016) elf_arch: type: 4, where=0x4008edc8 addr=0x400daf28 offset=0x85c
+
+D (6016) ELF: Find function listen addr=400dafb4
+D (6016) elf_arch: type: 4, where=0x4008edd0 addr=0x400dafb4 offset=0x864
+
+D (6016) ELF: Find function accept addr=400db000
+D (6016) elf_arch: type: 4, where=0x4008eddc addr=0x400db000 offset=0x870
+
+D (6016) ELF: Find function recv addr=400db168
+D (6016) elf_arch: type: 4, where=0x4008ede0 addr=0x400db168 offset=0x874
+
+D (6026) ELF: Find function strcmp addr=40001274
+D (6026) elf_arch: type: 4, where=0x4008edf4 addr=0x40001274 offset=0x888
+
+D (6026) ELF: Find function send addr=400db0f8
+D (6026) elf_arch: type: 4, where=0x4008edfc addr=0x400db0f8 offset=0x890
+
+D (6026) ELF: Find function sendto addr=400db134
+D (6026) elf_arch: type: 4, where=0x4008ee3c addr=0x400db134 offset=0x8d0
+
+D (6026) ELF: Find function strchr addr=4000c53c
+D (6026) elf_arch: type: 4, where=0x4008ee50 addr=0x4000c53c offset=0x8e4
+
+D (6036) ELF: Find function snprintf addr=4011ca1c
+D (6036) elf_arch: type: 4, where=0x4008ee58 addr=0x4011ca1c offset=0x8ec
+
+D (6036) ELF: Find function write addr=400da7dc
+D (6036) elf_arch: type: 4, where=0x4008ee5c addr=0x400da7dc offset=0x8f0
+
+D (6036) ELF: Find function strcpy addr=400013ac
+D (6036) elf_arch: type: 4, where=0x4008ee6c addr=0x400013ac offset=0x900
+
+I (6036) kernel_main: Starting ELF...
+
+============================================
+  Collision Server - Telemetry Bridge
+============================================
+HTTP server on port 80
+UDP forwarding to localhost:8000
+
+Loading dashboard from LittleFS...
+Loaded 8191 bytes from index.html
+
+***ERROR*** A stack overflow in task main has been detected.
+
+
+Backtrace: 0x40081b21:0x3ffb5a00 0x40086761:0x3ffb5a20 0x40087556:0x3ffb5a40 0x40088b63:0x3ffb5ac0 0x40087660:0x3ffb5ae0 0x40087612:0x3ffb5b00 0x0006061d:0x00000000 |<-CORRUPTED
+
+
+
+
+ELF file SHA256: 67444914c
+
+Rebooting...

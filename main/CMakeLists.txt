@@ -17,6 +17,7 @@ idf_component_register(
 )
 
 target_link_libraries(${COMPONENT_LIB} INTERFACE
+    # File I/O shims
     "-u shim_open"
     "-u shim_read"
     "-u shim_write"
@@ -80,6 +81,52 @@ target_link_libraries(${COMPONENT_LIB} INTERFACE
     "-u c2_pipe_get_socket"
     "-u c2_pipe_set_mirror"
     "-u c2_pipe_is_active"
+    # Math functions - ensure they're linked for guest ELFs
+    "-u sinf"
+    "-u cosf"
+    "-u tanf"
+    "-u sqrtf"
+    "-u powf"
+    "-u expf"
+    "-u logf"
+    "-u fabsf"
+    "-u floorf"
+    "-u ceilf"
+    "-u atan2f"
+    "-u asinf"
+    "-u acosf"
+    "-u atanf"
+    "-u log10f"
+    "-u fmodf"
+    "-u roundf"
+    # Double precision math
+    "-u sin"
+    "-u cos"
+    "-u tan"
+    "-u sqrt"
+    "-u pow"
+    "-u exp"
+    "-u log"
+    "-u fabs"
+    "-u floor"
+    "-u ceil"
+    "-u atan2"
+    # libgcc soft-float helpers for double precision
+    "-u __floatsidf"
+    "-u __extendsfdf2"
+    "-u __adddf3"
+    "-u __divdf3"
+    "-u __truncdfsf2"
+    "-u __muldf3"
+    "-u __subdf3"
+    "-u __fixdfsi"
+    "-u __floatunsidf"
+    "-u __gedf2"
+    "-u __ledf2"
+    "-u __ltdf2"
+    "-u __gtdf2"
+    "-u __eqdf2"
+    "-u __nedf2"
 )
 
 # AUTOMATION: Pack the 'data' directory into a LittleFS image

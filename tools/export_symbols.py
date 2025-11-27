@@ -125,6 +125,63 @@ LOG_SYMBOLS = [
     "esp_log_timestamp",
 ]
 
+# Standard C string functions
+STRING_SYMBOLS = [
+    "strlen",
+    "strcpy",
+    "strncpy",
+    "strcat",
+    "strncat",
+    "strcmp",
+    "strncmp",
+    "strchr",
+    "strrchr",
+    "strstr",
+    "memset",
+    "memcpy",
+    "memmove",
+    "memcmp",
+    "strtod",
+    "strtol",
+    "strtoul",
+    "atoi",
+    "atol",
+    "sprintf",
+    "snprintf",
+    "sscanf",
+]
+
+# libgcc soft-float helpers (needed for double precision operations in guest ELFs)
+LIBGCC_SYMBOLS = [
+    "__floatsidf",    # int to double
+    "__extendsfdf2",  # float to double
+    "__adddf3",       # double addition
+    "__divdf3",       # double division
+    "__truncdfsf2",   # double to float
+    "__muldf3",       # double multiplication
+    "__subdf3",       # double subtraction
+    "__fixdfsi",      # double to int
+    "__floatunsidf",  # unsigned int to double
+    "__gedf2",        # double compare >=
+    "__ledf2",        # double compare <=
+    "__ltdf2",        # double compare <
+    "__gtdf2",        # double compare >
+    "__eqdf2",        # double compare ==
+    "__nedf2",        # double compare !=
+    "__divsf3",       # single precision division
+    "__addsf3",       # single precision addition
+    "__subsf3",       # single precision subtraction
+    "__mulsf3",       # single precision multiplication
+]
+
+# Math symbols (single and double precision)
+MATH_SYMBOLS = [
+    "sinf", "cosf", "tanf", "asinf", "acosf", "atanf", "atan2f",
+    "sqrtf", "powf", "expf", "logf", "log10f", "fabsf", "floorf", "ceilf", "fmodf", "roundf",
+    "sin", "cos", "tan", "asin", "acos", "atan", "atan2",
+    "sqrt", "pow", "exp", "log", "log10", "fabs", "floor", "ceil", "fmod", "round",
+]
+
 
 def find_nm_tool():
     """Find the appropriate nm tool for Xtensa."""
@@ -182,7 +239,7 @@ def generate_symbol_table(elf_path, output_path, symbols_to_export=None):
     print(f"Using nm tool: {nm_tool}")
 
     if symbols_to_export is None:
-        symbols_to_export = EXPORT_SYMBOLS + FREERTOS_SYMBOLS + GPIO_SYMBOLS + LOG_SYMBOLS
+        symbols_to_export = EXPORT_SYMBOLS + FREERTOS_SYMBOLS + GPIO_SYMBOLS + LOG_SYMBOLS + STRING_SYMBOLS + LIBGCC_SYMBOLS + MATH_SYMBOLS
 
     # Normalize to tuples: (real_name, export_name)
     normalized_symbols = []

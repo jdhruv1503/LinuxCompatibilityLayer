@@ -294,13 +294,15 @@ def run_simulation(timeout=DEFAULT_TIMEOUT, networking=True, c2_mode=False, port
         # For network traffic verification, use real hardware or Wireshark with tap networking.
         nic_opts = "user,model=open_eth"
 
-        # Add port forwarding if specified (for C2 server)
+        # Add port forwarding if specified
         if port_forward:
-            nic_opts += f",hostfwd=tcp::{port_forward}-:{port_forward}"
-            log(f"Port forwarding enabled: localhost:{port_forward} -> guest:{port_forward}")
-
+            # Handle both single int/str and list
+            ports = port_forward if isinstance(port_forward, list) else [port_forward]
+            for p in ports:
+                nic_opts += f",hostfwd=tcp::{p}-:{p}"
+                log(f"Port forwarding enabled: localhost:{p} -> guest:{p}")
+        
         qemu_cmd.extend(["-nic", nic_opts])
-
     debug(f"QEMU command: {' '.join(qemu_cmd)}")
 
     # Change to project root for relative paths
@@ -368,7 +370,7 @@ def run_simulation(timeout=DEFAULT_TIMEOUT, networking=True, c2_mode=False, port
         error(f"QEMU execution failed: {e}")
 
 
-def full_workflow(timeout=DEFAULT_TIMEOUT, networking=True, c2_mode=False):
+def full_workflow(timeout=DEFAULT_TIMEOUT, networking=True, c2_mode=False, port_forward=None):
     """
     Complete build and simulation workflow:
     1. Build project (first pass)
@@ -380,7 +382,9 @@ def full_workflow(timeout=DEFAULT_TIMEOUT, networking=True, c2_mode=False):
     """
     log("=" * 60)
     log("FULL BUILD & SIMULATION WORKFLOW")
-    if c2_mode:
+    if port_forward:
+        log(f"(Port forwarding: {port_forward})")
+    elif c2_mode:
         log("(C2 Mode: Port 9000 forwarded)")
     log("=" * 60)
 
@@ -408,8 +412,10 @@ def full_workflow(timeout=DEFAULT_TIMEOUT, networking=True, c2_mode=False):
 
     # Step 6: Run simulation
     log("\n[6/6] Run simulation...")
-    port = 9000 if c2_mode else None
-    run_simulation(timeout=timeout, networking=networking, c2_mode=c2_mode, port_forward=port)
+    # Default to 9000 for C2 mode if no ports specified
+    if c2_mode and not port_forward:
+        port_forward = 9000
+    run_simulation(timeout=timeout, networking=networking, c2_mode=c2_mode, port_forward=port_forward)
 
     if not c2_mode:
         log("\n" + "=" * 60)
@@ -461,6 +467,8 @@ C2 Demo Testing:
                        help="Verbose output")
     parser.add_argument("--c2", action="store_true",
                        help="C2 mode: forward port 9000, run interactively")
+    parser.add_argument("--demo2", action="store_true",
+                       help="Demo 2: forward ports 80 & 9000, run interactively")
     parser.add_argument("--port", "-p", type=int, default=9000,
                        help="Port to forward in C2/sim mode (default: 9000)")
     parser.add_argument("--build-guest", type=str, default=None,
@@ -488,6 +496,17 @@ C2 Demo Testing:
         if args.clean:
             clean_build()
 
+        # Handle Demo 2 flag implication
+        if args.demo2:
+            args.c2 = True
+
+        # Determine ports to forward
+        ports = []
+        if args.demo2:
+            ports = [80, 9000]
+        elif args.c2:
+            ports = [args.port]
+
         if specific_action:
             # Run specific actions
             if args.build:
@@ -499,12 +518,11 @@ C2 Demo Testing:
                 merge_binaries()
                 pad_flash()
             if args.sim:
-                port = args.port if args.c2 else None
                 run_simulation(timeout=args.timeout, networking=not args.no_net,
-                             c2_mode=args.c2, port_forward=port)
+                             c2_mode=args.c2, port_forward=ports)
         else:
             # Full workflow
-            full_workflow(timeout=args.timeout, networking=not args.no_net, c2_mode=args.c2)
+            full_workflow(timeout=args.timeout, networking=not args.no_net, c2_mode=args.c2, port_forward=ports)
 
     except KeyboardInterrupt:
         log("\nInterrupted by user")

@@ -182,7 +182,7 @@ static void c2_handle_client(int client_sock) {
 
     // Receive and save payload
     if (c2_receive_payload(client_sock) != 0) {
-        printf("[Bot] Failed to receive payload\n");
+        // Silent failure - reduces noise in demo UI
         close(client_sock);
         return;
     }

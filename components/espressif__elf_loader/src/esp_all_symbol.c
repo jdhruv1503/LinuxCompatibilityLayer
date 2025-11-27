@@ -85,6 +85,74 @@ extern void gpio_config(void);
 extern void gpio_reset_pin(void);
 extern void esp_log_write(void);
 extern void esp_log_timestamp(void);
+extern void strlen(void);
+extern void strcpy(void);
+extern void strncpy(void);
+extern void strcat(void);
+extern void strncat(void);
+extern void strcmp(void);
+extern void strncmp(void);
+extern void strchr(void);
+extern void strrchr(void);
+extern void strstr(void);
+extern void memset(void);
+extern void memcpy(void);
+extern void memmove(void);
+extern void memcmp(void);
+extern void strtod(void);
+extern void strtol(void);
+extern void strtoul(void);
+extern void atoi(void);
+extern void atol(void);
+extern void snprintf(void);
+extern void __floatsidf(void);
+extern void __extendsfdf2(void);
+extern void __adddf3(void);
+extern void __divdf3(void);
+extern void __truncdfsf2(void);
+extern void __muldf3(void);
+extern void __subdf3(void);
+extern void __fixdfsi(void);
+extern void __floatunsidf(void);
+extern void __gedf2(void);
+extern void __ledf2(void);
+extern void __ltdf2(void);
+extern void __gtdf2(void);
+extern void __eqdf2(void);
+extern void __nedf2(void);
+extern void __divsf3(void);
+extern void __addsf3(void);
+extern void __subsf3(void);
+extern void __mulsf3(void);
+extern void sinf(void);
+extern void cosf(void);
+extern void tanf(void);
+extern void asinf(void);
+extern void acosf(void);
+extern void atanf(void);
+extern void atan2f(void);
+extern void sqrtf(void);
+extern void powf(void);
+extern void expf(void);
+extern void logf(void);
+extern void log10f(void);
+extern void fabsf(void);
+extern void floorf(void);
+extern void ceilf(void);
+extern void fmodf(void);
+extern void roundf(void);
+extern void sin(void);
+extern void cos(void);
+extern void tan(void);
+extern void atan(void);
+extern void atan2(void);
+extern void sqrt(void);
+extern void pow(void);
+extern void exp(void);
+extern void log(void);
+extern void fabs(void);
+extern void floor(void);
+extern void ceil(void);
 
 /* Custom symbol table for ELF loader */
 const struct esp_elfsym g_customer_elfsyms[] = {
@@ -166,5 +234,73 @@ const struct esp_elfsym g_customer_elfsyms[] = {
     ESP_ELFSYM_EXPORT(gpio_reset_pin),
     ESP_ELFSYM_EXPORT(esp_log_write),
     ESP_ELFSYM_EXPORT(esp_log_timestamp),
+    ESP_ELFSYM_EXPORT(strlen),
+    ESP_ELFSYM_EXPORT(strcpy),
+    ESP_ELFSYM_EXPORT(strncpy),
+    ESP_ELFSYM_EXPORT(strcat),
+    ESP_ELFSYM_EXPORT(strncat),
+    ESP_ELFSYM_EXPORT(strcmp),
+    ESP_ELFSYM_EXPORT(strncmp),
+    ESP_ELFSYM_EXPORT(strchr),
+    ESP_ELFSYM_EXPORT(strrchr),
+    ESP_ELFSYM_EXPORT(strstr),
+    ESP_ELFSYM_EXPORT(memset),
+    ESP_ELFSYM_EXPORT(memcpy),
+    ESP_ELFSYM_EXPORT(memmove),
+    ESP_ELFSYM_EXPORT(memcmp),
+    ESP_ELFSYM_EXPORT(strtod),
+    ESP_ELFSYM_EXPORT(strtol),
+    ESP_ELFSYM_EXPORT(strtoul),
+    ESP_ELFSYM_EXPORT(atoi),
+    ESP_ELFSYM_EXPORT(atol),
+    ESP_ELFSYM_EXPORT(snprintf),
+    ESP_ELFSYM_EXPORT(__floatsidf),
+    ESP_ELFSYM_EXPORT(__extendsfdf2),
+    ESP_ELFSYM_EXPORT(__adddf3),
+    ESP_ELFSYM_EXPORT(__divdf3),
+    ESP_ELFSYM_EXPORT(__truncdfsf2),
+    ESP_ELFSYM_EXPORT(__muldf3),
+    ESP_ELFSYM_EXPORT(__subdf3),
+    ESP_ELFSYM_EXPORT(__fixdfsi),
+    ESP_ELFSYM_EXPORT(__floatunsidf),
+    ESP_ELFSYM_EXPORT(__gedf2),
+    ESP_ELFSYM_EXPORT(__ledf2),
+    ESP_ELFSYM_EXPORT(__ltdf2),
+    ESP_ELFSYM_EXPORT(__gtdf2),
+    ESP_ELFSYM_EXPORT(__eqdf2),
+    ESP_ELFSYM_EXPORT(__nedf2),
+    ESP_ELFSYM_EXPORT(__divsf3),
+    ESP_ELFSYM_EXPORT(__addsf3),
+    ESP_ELFSYM_EXPORT(__subsf3),
+    ESP_ELFSYM_EXPORT(__mulsf3),
+    ESP_ELFSYM_EXPORT(sinf),
+    ESP_ELFSYM_EXPORT(cosf),
+    ESP_ELFSYM_EXPORT(tanf),
+    ESP_ELFSYM_EXPORT(asinf),
+    ESP_ELFSYM_EXPORT(acosf),
+    ESP_ELFSYM_EXPORT(atanf),
+    ESP_ELFSYM_EXPORT(atan2f),
+    ESP_ELFSYM_EXPORT(sqrtf),
+    ESP_ELFSYM_EXPORT(powf),
+    ESP_ELFSYM_EXPORT(expf),
+    ESP_ELFSYM_EXPORT(logf),
+    ESP_ELFSYM_EXPORT(log10f),
+    ESP_ELFSYM_EXPORT(fabsf),
+    ESP_ELFSYM_EXPORT(floorf),
+    ESP_ELFSYM_EXPORT(ceilf),
+    ESP_ELFSYM_EXPORT(fmodf),
+    ESP_ELFSYM_EXPORT(roundf),
+    ESP_ELFSYM_EXPORT(sin),
+    ESP_ELFSYM_EXPORT(cos),
+    ESP_ELFSYM_EXPORT(tan),
+    ESP_ELFSYM_EXPORT(atan),
+    ESP_ELFSYM_EXPORT(atan2),
+    ESP_ELFSYM_EXPORT(sqrt),
+    ESP_ELFSYM_EXPORT(pow),
+    ESP_ELFSYM_EXPORT(exp),
+    ESP_ELFSYM_EXPORT(log),
+    ESP_ELFSYM_EXPORT(fabs),
+    ESP_ELFSYM_EXPORT(floor),
+    ESP_ELFSYM_EXPORT(ceil),
     ESP_ELFSYM_END
 };

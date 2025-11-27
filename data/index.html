@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>V2X Collision Avoidance</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #e4e4e4;
+            min-height: 100vh;
+            padding: 10px;
+        }
+        h1 {
+            text-align: center;
+            color: #e94560;
+            margin-bottom: 10px;
+            font-size: 1.3em;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .panel {
+            background: rgba(22, 33, 62, 0.9);
+            border-radius: 8px;
+            padding: 12px;
+            border: 1px solid rgba(233, 69, 96, 0.2);
+            flex: 1;
+            min-width: 280px;
+        }
+        .panel h2 {
+            color: #e94560;
+            font-size: 1em;
+            margin-bottom: 8px;
+            border-bottom: 1px solid rgba(233, 69, 96, 0.3);
+            padding-bottom: 6px;
+        }
+        #visualization {
+            width: 100%;
+            height: 300px;
+            background: #0f3460;
+            border-radius: 8px;
+            border: 2px solid #16213e;
+        }
+        #visualization.alert {
+            border-color: #e94560;
+            box-shadow: 0 0 20px rgba(233, 69, 96, 0.5);
+        }
+        .car-selector {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .car-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        .car-btn.ego { background: #10b981; color: white; }
+        .car-btn.target { background: #3b82f6; color: white; }
+        .car-btn.inactive { opacity: 0.4; }
+        .slider-row {
+            margin: 8px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .slider-row label {
+            width: 80px;
+            font-size: 0.85em;
+            color: #94a3b8;
+        }
+        .slider-row input[type="range"] {
+            flex: 1;
+            height: 6px;
+            -webkit-appearance: none;
+            background: #0f3460;
+            border-radius: 3px;
+        }
+        .slider-row input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #e94560;
+        }
+        .slider-row .value {
+            width: 60px;
+            text-align: right;
+            font-family: monospace;
+            color: #e94560;
+        }
+        .status-panel {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .status-panel.safe { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+        .status-panel.warning { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+        .status-panel.danger { background: rgba(239, 68, 68, 0.3); color: #ef4444; animation: pulse 0.5s infinite; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        .metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .metric {
+            background: rgba(15, 52, 96, 0.5);
+            padding: 8px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .metric-label { font-size: 0.75em; color: #64748b; }
+        .metric-value { font-size: 1.2em; font-weight: bold; color: #e94560; }
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .btn-start { background: #10b981; color: white; }
+        .btn-stop { background: #6b7280; color: white; }
+        .btn.active { box-shadow: 0 0 10px currentColor; }
+        #collisionLog {
+            height: 100px;
+            overflow-y: auto;
+            background: #0f3460;
+            border-radius: 4px;
+            padding: 8px;
+            font-family: monospace;
+            font-size: 0.8em;
+            margin-top: 8px;
+        }
+        .log-entry { margin: 2px 0; }
+        .log-entry.collision { color: #ef4444; }
+        .log-entry.clear { color: #10b981; }
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 8px;
+            font-size: 0.8em;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        .legend-dot.ego { background: #10b981; }
+        .legend-dot.target { background: #3b82f6; }
+    </style>
+</head>
+<body>
+    <h1>V2X Collision Avoidance Demo</h1>
+
+    <div class="container">
+        <div class="panel" style="min-width: 320px;">
+            <h2>Vehicle Visualization</h2>
+            <canvas id="visualization"></canvas>
+            <div class="legend">
+                <div class="legend-item"><div class="legend-dot ego"></div>Ego (You)</div>
+                <div class="legend-item"><div class="legend-dot target"></div>Target</div>
+            </div>
+            <div id="statusPanel" class="status-panel safe">SAFE - No Collision Risk</div>
+            <div class="metrics">
+                <div class="metric">
+                    <div class="metric-label">Distance</div>
+                    <div class="metric-value" id="distValue">--</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">TTC</div>
+                    <div class="metric-value" id="ttcValue">--</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Vehicle Control</h2>
+            <div class="car-selector">
+                <button class="car-btn ego" id="btnEgo" onclick="selectCar(0)">Ego Car</button>
+                <button class="car-btn target inactive" id="btnTarget" onclick="selectCar(1)">Target Car</button>
+            </div>
+
+            <div class="slider-row">
+                <label>Lat Offset</label>
+                <input type="range" id="latOffset" min="-50" max="50" value="0">
+                <span class="value" id="latOffsetVal">0m</span>
+            </div>
+            <div class="slider-row">
+                <label>Lon Offset</label>
+                <input type="range" id="lonOffset" min="-50" max="50" value="0">
+                <span class="value" id="lonOffsetVal">0m</span>
+            </div>
+            <div class="slider-row">
+                <label>Speed</label>
+                <input type="range" id="speed" min="0" max="30" value="0">
+                <span class="value" id="speedVal">0 m/s</span>
+            </div>
+            <div class="slider-row">
+                <label>Heading</label>
+                <input type="range" id="heading" min="0" max="360" step="5" value="0">
+                <span class="value" id="headingVal">0 deg</span>
+            </div>
+
+            <div class="btn-row">
+                <button class="btn btn-start" id="btnStart" onclick="startStream()">Manual Stream</button>
+                <button class="btn btn-start" style="background-color: #e94560;" id="btnAuto" onclick="startAutoScenario()">Auto Collision</button>
+                <button class="btn btn-stop" id="btnStop" onclick="stopStream()">Stop</button>
+            </div>
+        </div>
+
+        <div class="panel" style="width: 100%;">
+            <h2>Collision Event Log (Persistent)</h2>
+            <div id="collisionLog"></div>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let selectedCar = 0;
+        let streaming = null;
+        const REF_LAT = 37.7749;
+        const REF_LON = -122.4194;
+        const METERS_PER_DEG_LAT = 111000;
+        const METERS_PER_DEG_LON = 85000;  // At SF latitude
+
+        // Vehicle states
+        let vehicles = [
+            { lat: REF_LAT, lon: REF_LON, speed: 0, heading: 0, x: 0, y: 0, vx: 0, vy: 0 },
+            { lat: REF_LAT + 0.0003, lon: REF_LON + 0.0002, speed: 0, heading: 180, x: 0, y: 0, vx: 0, vy: 0 }
+        ];
+
+        // Collision history (persisted)
+        let collisionLog = [];
+
+        // Load persisted collisions
+        function loadCollisions() {
+            fetch('/api/collisions')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.events) {
+                        collisionLog = data.events;
+                        updateLogDisplay();
+                    }
+                })
+                .catch(() => {});
+        }
+
+        // Save collision to server
+        function saveCollision(event) {
+            collisionLog.push(event);
+            updateLogDisplay();
+            fetch('/api/collision', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(event)
+            }).catch(() => {});
+        }
+
+        function updateLogDisplay() {
+            const log = document.getElementById('collisionLog');
+            log.innerHTML = collisionLog.slice(-20).map(e =>
+                `<div class="log-entry ${e.type}">[${e.time}] ${e.msg}</div>`
+            ).join('');
+            log.scrollTop = log.scrollHeight;
+        }
+
+        // Select car
+        function selectCar(id) {
+            selectedCar = id;
+            document.getElementById('btnEgo').className = 'car-btn ego' + (id === 0 ? '' : ' inactive');
+            document.getElementById('btnTarget').className = 'car-btn target' + (id === 1 ? '' : ' inactive');
+
+            // Update sliders to show selected car's values
+            const v = vehicles[id];
+            document.getElementById('latOffset').value = (v.lat - REF_LAT) * METERS_PER_DEG_LAT;
+            document.getElementById('lonOffset').value = (v.lon - REF_LON) * METERS_PER_DEG_LON;
+            document.getElementById('speed').value = v.speed;
+            document.getElementById('heading').value = v.heading;
+            updateSliderDisplays();
+        }
+
+        // Update slider value displays
+        function updateSliderDisplays() {
+            document.getElementById('latOffsetVal').textContent = document.getElementById('latOffset').value + 'm';
+            document.getElementById('lonOffsetVal').textContent = document.getElementById('lonOffset').value + 'm';
+            document.getElementById('speedVal').textContent = document.getElementById('speed').value + ' m/s';
+            document.getElementById('headingVal').textContent = document.getElementById('heading').value + ' deg';
+        }
+
+        // Handle slider changes
+        ['latOffset', 'lonOffset', 'speed', 'heading'].forEach(id => {
+            document.getElementById(id).oninput = function() {
+                updateSliderDisplays();
+                const v = vehicles[selectedCar];
+                v.lat = REF_LAT + parseFloat(document.getElementById('latOffset').value) / METERS_PER_DEG_LAT;
+                v.lon = REF_LON + parseFloat(document.getElementById('lonOffset').value) / METERS_PER_DEG_LON;
+                v.speed = parseFloat(document.getElementById('speed').value);
+                v.heading = parseFloat(document.getElementById('heading').value);
+                updateVehicleVectors();
+                draw();
+            };
+        });
+
+        // Update vehicle position/velocity vectors
+        function updateVehicleVectors() {
+            for (let i = 0; i < 2; i++) {
+                const v = vehicles[i];
+                v.x = (v.lon - REF_LON) * METERS_PER_DEG_LON;
+                v.y = (v.lat - REF_LAT) * METERS_PER_DEG_LAT;
+                const rad = v.heading * Math.PI / 180;
+                v.vx = v.speed * Math.sin(rad);
+                v.vy = v.speed * Math.cos(rad);
+            }
+        }
+
+        // Calculate distance and TTC
+        function calculateMetrics() {
+            const v0 = vehicles[0];
+            const v1 = vehicles[1];
+            const dx = v1.x - v0.x;
+            const dy = v1.y - v0.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+
+            const dvx = v1.vx - v0.vx;
+            const dvy = v1.vy - v0.vy;
+            const relSpeed = Math.sqrt(dvx*dvx + dvy*dvy);
+
+            const ttc = relSpeed > 0.1 ? dist / relSpeed : 999;
+
+            return { dist, ttc, relSpeed };
+        }
+
+        // Canvas drawing
+        const canvas = document.getElementById('visualization');
+        const ctx = canvas.getContext('2d');
+        let lastCollisionState = false;
+
+        function resizeCanvas() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width - 24;
+            canvas.height = 300;
+        }
+
+        function draw() {
+            resizeCanvas();
+            const w = canvas.width;
+            const h = canvas.height;
+            const scale = 3;  // pixels per meter
+            const cx = w / 2;
+            const cy = h / 2;
+
+            // Clear
+            ctx.fillStyle = '#0f3460';
+            ctx.fillRect(0, 0, w, h);
+
+            // Grid
+            ctx.strokeStyle = '#1e3a5f';
+            ctx.lineWidth = 1;
+            for (let x = 0; x < w; x += 20) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, h);
+                ctx.stroke();
+            }
+            for (let y = 0; y < h; y += 20) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(w, y);
+                ctx.stroke();
+            }
+
+            // Calculate metrics
+            const metrics = calculateMetrics();
+            const isCollision = metrics.dist < 10 && metrics.ttc < 2;
+
+            // Update status
+            const statusPanel = document.getElementById('statusPanel');
+            const visCanvas = document.getElementById('visualization');
+
+            if (isCollision) {
+                statusPanel.className = 'status-panel danger';
+                statusPanel.textContent = 'COLLISION IMMINENT!';
+                visCanvas.className = 'alert';
+
+                // Log collision event
+                if (!lastCollisionState) {
+                    const now = new Date().toLocaleTimeString();
+                    saveCollision({
+                        type: 'collision',
+                        time: now,
+                        msg: `ALERT: TTC=${metrics.ttc.toFixed(1)}s Dist=${metrics.dist.toFixed(1)}m`
+                    });
+                }
+            } else if (metrics.ttc < 5) {
+                statusPanel.className = 'status-panel warning';
+                statusPanel.textContent = 'WARNING - Monitor Distance';
+                visCanvas.className = '';
+
+                if (lastCollisionState) {
+                    const now = new Date().toLocaleTimeString();
+                    saveCollision({
+                        type: 'clear',
+                        time: now,
+                        msg: 'Collision risk cleared'
+                    });
+                }
+            } else {
+                statusPanel.className = 'status-panel safe';
+                statusPanel.textContent = 'SAFE - No Collision Risk';
+                visCanvas.className = '';
+
+                if (lastCollisionState) {
+                    const now = new Date().toLocaleTimeString();
+                    saveCollision({
+                        type: 'clear',
+                        time: now,
+                        msg: 'Collision risk cleared'
+                    });
+                }
+            }
+            lastCollisionState = isCollision;
+
+            // Update metrics display
+            document.getElementById('distValue').textContent = metrics.dist.toFixed(1) + 'm';
+            document.getElementById('ttcValue').textContent = metrics.ttc < 100 ? metrics.ttc.toFixed(1) + 's' : '--';
+
+            // Draw connection line (red if collision)
+            if (isCollision) {
+                ctx.strokeStyle = '#ef4444';
+                ctx.lineWidth = 3;
+            } else {
+                ctx.strokeStyle = '#64748b';
+                ctx.lineWidth = 1;
+            }
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(cx + vehicles[0].x * scale, cy - vehicles[0].y * scale);
+            ctx.lineTo(cx + vehicles[1].x * scale, cy - vehicles[1].y * scale);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Draw vehicles
+            for (let i = 0; i < 2; i++) {
+                const v = vehicles[i];
+                const x = cx + v.x * scale;
+                const y = cy - v.y * scale;
+
+                // Velocity vector
+                if (v.speed > 0) {
+                    const vecLen = v.speed * scale * 2;
+                    ctx.strokeStyle = i === 0 ? '#10b981' : '#3b82f6';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(x, y);
+                    ctx.lineTo(x + v.vx * scale * 2, y - v.vy * scale * 2);
+                    ctx.stroke();
+
+                    // Arrow head
+                    const angle = Math.atan2(-v.vy, v.vx);
+                    ctx.beginPath();
+                    ctx.moveTo(x + v.vx * scale * 2, y - v.vy * scale * 2);
+                    ctx.lineTo(x + v.vx * scale * 2 - 8 * Math.cos(angle - 0.5), y - v.vy * scale * 2 - 8 * Math.sin(angle - 0.5));
+                    ctx.lineTo(x + v.vx * scale * 2 - 8 * Math.cos(angle + 0.5), y - v.vy * scale * 2 - 8 * Math.sin(angle + 0.5));
+                    ctx.closePath();
+                    ctx.fillStyle = i === 0 ? '#10b981' : '#3b82f6';
+                    ctx.fill();
+                }
+
+                // Vehicle dot
+                ctx.beginPath();
+                ctx.arc(x, y, isCollision ? 12 : 8, 0, Math.PI * 2);
+                ctx.fillStyle = isCollision ? '#ef4444' : (i === 0 ? '#10b981' : '#3b82f6');
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Label
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 10px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(i === 0 ? 'EGO' : 'TGT', x, y - 15);
+            }
+        }
+
+        function sendDataForCar(id) {
+             const v = vehicles[id];
+             fetch('/api/telemetry', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    lat: v.lat,
+                    lon: v.lon,
+                    speed_mps: v.speed,
+                    heading: v.heading,
+                    car_id: id
+                })
+            }).catch(() => {});
+        }
+
+        function startAutoScenario() {
+            if (streaming) return;
+            
+            // Setup Head-on collision scenario
+            // Ego: Moving North at 15m/s
+            vehicles[0].lat = REF_LAT - 0.0005;
+            vehicles[0].lon = REF_LON;
+            vehicles[0].speed = 15;
+            vehicles[0].heading = 0; 
+            
+            // Target: Moving South at 15m/s
+            vehicles[1].lat = REF_LAT + 0.0005;
+            vehicles[1].lon = REF_LON;
+            vehicles[1].speed = 15;
+            vehicles[1].heading = 180;
+            
+            updateVehicleVectors();
+            selectCar(0);
+            
+            document.getElementById('btnAuto').classList.add('active');
+            
+            streaming = setInterval(() => {
+                // Move cars
+                for(let i=0; i<2; i++) {
+                    const v = vehicles[i];
+                    const dy = v.speed * Math.cos(v.heading * Math.PI / 180) * 0.1;
+                    const dx = v.speed * Math.sin(v.heading * Math.PI / 180) * 0.1;
+                    v.lat += dy / METERS_PER_DEG_LAT;
+                    v.lon += dx / METERS_PER_DEG_LON;
+                }
+                
+                updateVehicleVectors();
+                draw();
+                
+                // Send BOTH cars to server
+                sendDataForCar(0);
+                setTimeout(() => sendDataForCar(1), 50); // Slight delay to separate packets
+                
+            }, 100);
+        }
+
+        function startStream() {
+            if (streaming) return;
+            streaming = setInterval(() => {
+                sendDataForCar(selectedCar); // Only sends selected manual car
+                draw();
+            }, 100);
+            document.getElementById('btnStart').classList.add('active');
+        }
+
+        function stopStream() {
+            if (streaming) {
+                clearInterval(streaming);
+                streaming = null;
+            }
+            document.getElementById('btnStart').classList.remove('active');
+            document.getElementById('btnAuto').classList.remove('active');
+        }
+
+        // Initialize
+        updateVehicleVectors();
+        updateSliderDisplays();
+        draw();
+        loadCollisions();
+
+        // Redraw on resize
+        window.addEventListener('resize', draw);
+    </script>
+</body>
+</html>

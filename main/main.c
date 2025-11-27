@@ -37,7 +37,18 @@ static const char *TAG = "kernel_main";
 
 // Default ELF to execute on boot
 // Updated via build_and_run.py --set-elf <app_name>
-#define DEFAULT_ELF_PATH "/linux/c2_bot.elf"
+#define DEFAULT_ELF_PATH "/linux/collision_server.elf"
+
+#include <math.h>
+
+// Dummy function to force linking of math symbols
+void force_link_math(void) {
+    volatile float f = 1.0f;
+    volatile double d = 1.0;
+    f = sinf(f) + cosf(f) + tanf(f) + sqrtf(f) + powf(f, 2.0f) + expf(f) + logf(f);
+    d = sin(d) + cos(d) + tan(d) + sqrt(d) + pow(d, 2.0) + exp(d) + log(d);
+    printf("Math check: %f %f\n", f, d);
+}
 
 /*==============================================================================
  * ELF Loader
@@ -156,6 +167,9 @@ static void list_elf_files(void)
 
 void app_main(void)
 {
+    // Ensure math symbols are linked
+    force_link_math();
+
     ESP_LOGI(TAG, "============================================");
     ESP_LOGI(TAG, "  Linux Compatibility Layer - ESP32");
     ESP_LOGI(TAG, "  ELF Loader Subsystem v2.0");
