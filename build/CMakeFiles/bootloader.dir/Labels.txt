@@ -1,0 +1,13 @@
+# Target labels
+ bootloader
+# Source files and their labels
+C:/Users/Dhruv/Documents/Projects/LinuxCompatibilityLayer/build/CMakeFiles/bootloader
+C:/Users/Dhruv/Documents/Projects/LinuxCompatibilityLayer/build/CMakeFiles/bootloader.rule
+C:/Users/Dhruv/Documents/Projects/LinuxCompatibilityLayer/build/CMakeFiles/bootloader-complete.rule
+C:/Users/Dhruv/Documents/Projects/LinuxCompatibilityLayer/build/bootloader-prefix/src/bootloader-stamp/bootloader-build.rule
+C:/Users/Dhruv/Documents/Projects/LinuxCompatibilityLayer/build/bootloader-prefix/src/bootloader-stamp/bootloader-configure.rule
+C:/Users/Dhruv/Documents/Projects/LinuxCompatibilityLayer/build/bootloader-prefix/src/bootloader-stamp/bootloader-download.rule
+C:/Users/Dhruv/Documents/Projects/LinuxCompatibilityLayer/build/bootloader-prefix/src/bootloader-stamp/bootloader-install.rule
+C:/Users/Dhruv/Documents/Projects/LinuxCompatibilityLayer/build/bootloader-prefix/src/bootloader-stamp/bootloader-mkdir.rule
+C:/Users/Dhruv/Documents/Projects/LinuxCompatibilityLayer/build/bootloader-prefix/src/bootloader-stamp/bootloader-patch.rule
+C:/Users/Dhruv/Documents/Projects/LinuxCompatibilityLayer/build/bootloader-prefix/src/bootloader-stamp/bootloader-update.rule

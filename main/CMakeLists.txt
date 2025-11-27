@@ -1,0 +1,90 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "syscalls/shim_unistd.c"
+        "syscalls/shim_socket.c"
+        "syscalls/shim_process.c"
+        "vfs_drivers/vfs_c2_pipe.c"
+        "drivers/drv_network.c"
+        "drivers/drv_fs_littlefs.c"
+        "drivers/drv_fs_sdcard.c"
+        "drivers/drv_devices.c"
+    INCLUDE_DIRS
+        "."
+        "syscalls"
+        "vfs_drivers"
+        "drivers"
+)
+
+target_link_libraries(${COMPONENT_LIB} INTERFACE
+    "-u shim_open"
+    "-u shim_read"
+    "-u shim_write"
+    "-u shim_close"
+    "-u shim_lseek"
+    "-u shim_ioctl"
+    "-u shim_stat"
+    "-u shim_fstat"
+    "-u shim_access"
+    "-u shim_unlink"
+    "-u shim_rename"
+    "-u shim_mkdir"
+    "-u shim_rmdir"
+    "-u shim_opendir"
+    "-u shim_readdir"
+    "-u shim_closedir"
+    "-u shim_getcwd"
+    "-u shim_chdir"
+    "-u shim_fopen"
+    # Printf/puts shims for C2 stdout redirection
+    "-u shim_printf"
+    "-u shim_puts"
+    # File descriptor duplication
+    "-u shim_dup"
+    "-u shim_dup2"
+    "-u shim_dup3"
+    # Network
+    "-u shim_socket"
+    "-u shim_bind"
+    "-u shim_listen"
+    "-u shim_accept"
+    "-u shim_connect"
+    "-u shim_send"
+    "-u shim_sendto"
+    "-u shim_recv"
+    "-u shim_recvfrom"
+    "-u shim_shutdown"
+    "-u shim_setsockopt"
+    "-u shim_getsockopt"
+    "-u shim_select"
+    "-u shim_poll"
+    "-u shim_gethostbyname"
+    "-u shim_getaddrinfo"
+    "-u shim_freeaddrinfo"
+    # Process
+    "-u shim_fork"
+    "-u shim_execve"
+    "-u shim_waitpid"
+    "-u shim_wait"
+    "-u shim_exit"
+    "-u shim__exit"
+    "-u shim_abort"
+    "-u shim_getpid"
+    "-u shim_getppid"
+    "-u shim_signal"
+    "-u shim_raise"
+    "-u shim_kill"
+    # C2 Pipe VFS driver
+    "-u vfs_c2_pipe_register"
+    "-u c2_pipe_set_socket"
+    "-u c2_pipe_get_socket"
+    "-u c2_pipe_set_mirror"
+    "-u c2_pipe_is_active"
+)
+
+# AUTOMATION: Pack the 'data' directory into a LittleFS image
+# Arguments:
+#   1. Partition Name (Must match partitions.csv): linux_fs
+#   2. Base Directory: data
+#   3. Flash Flag: FLASH_IN_PROJECT (Flashes automatically with idf.py flash)
+littlefs_create_partition_image(linux_fs ../data FLASH_IN_PROJECT)
