@@ -37,6 +37,15 @@ extern void shim_puts(void);
 extern void shim_dup(void);
 extern void shim_dup2(void);
 extern void shim_dup3(void);
+extern void shim_clock_gettime(void);
+extern void shim_nanosleep(void);
+extern void shim_getuid(void);
+extern void shim_getgid(void);
+extern void shim_geteuid(void);
+extern void shim_getegid(void);
+extern void shim_ftruncate(void);
+extern void shim_pipe(void);
+extern void shim_gettimeofday(void);
 
 /*==============================================================================
  * Extern declarations - Socket shims
@@ -158,6 +167,15 @@ const struct esp_elfsym g_customer_elfsyms[] = {
     { "closedir", &shim_closedir },
     { "getcwd", &shim_getcwd },
     { "chdir", &shim_chdir },
+    { "clock_gettime", &shim_clock_gettime },
+    { "nanosleep", &shim_nanosleep },
+    { "getuid", &shim_getuid },
+    { "getgid", &shim_getgid },
+    { "geteuid", &shim_geteuid },
+    { "getegid", &shim_getegid },
+    { "ftruncate", &shim_ftruncate },
+    { "pipe", &shim_pipe },
+    { "gettimeofday", &shim_gettimeofday },
 
     /*--------------------------------------------------------------------------
      * Standard I/O with C2 redirection support

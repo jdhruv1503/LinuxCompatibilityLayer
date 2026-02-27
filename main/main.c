@@ -16,6 +16,9 @@
 #include <string.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <strings.h>
+
+#include "lwip/sockets.h"
 
 #include "esp_log.h"
 #include "esp_elf.h"
@@ -26,6 +29,9 @@
 #include "drivers/drivers.h"
 
 static const char *TAG = "kernel_main";
+
+extern int lcl_heap_snprint_all(char *buf, size_t buflen);
+extern void lcl_heap_print_all(void);
 
 /*==============================================================================
  * Configuration
@@ -219,7 +225,7 @@ void app_main(void)
     } else {
         ESP_LOGW(TAG, "No ELF found at %s", DEFAULT_ELF_PATH);
         ESP_LOGI(TAG, "To test the ELF loader:");
-        ESP_LOGI(TAG, "  1. Build a guest ELF with: tools\\build_guest_app.bat <app>");
+        ESP_LOGI(TAG, "  1. Build a guest ELF with: tools/build_guest_app.bat <app> (Windows) or make -f tools/Makefile.guest APP=apps/<app> (Linux/macOS)");
         ESP_LOGI(TAG, "  2. Copy it to the 'data' folder");
         ESP_LOGI(TAG, "  3. Rebuild and flash the firmware");
     }

@@ -1,0 +1,17 @@
+# Cross-platform guest app builder for LinuxCompatibilityLayer
+# Usage: make -f tools/Makefile.guest APP=apps/c2_payload SYMBOLS=build/symbols.h
+
+CC ?= xtensa-esp32-elf-gcc
+APP ?= apps/c2_payload
+SYMBOLS ?= build/esp_all_symbol.c
+
+CFLAGS = -fPIC -mlongcalls -nostdlib -Os -g
+LDFLAGS = -shared -e app_main -Wl,--no-undefined
+
+$(APP)/$(notdir $(APP)).elf: $(APP)/*.c $(SYMBOLS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -I$(dir $(SYMBOLS)) -o $@ $^
+
+clean:
+	rm -f $(APP)/*.elf
+
+.PHONY: clean
