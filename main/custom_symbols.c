@@ -85,6 +85,19 @@ extern void shim_raise(void);
 extern void shim_kill(void);
 
 /*==============================================================================
+ * Extern declarations - Time shims (NEW - Feb 2026)
+ *============================================================================*/
+extern void shim_clock_gettime(void);
+extern void shim_gettimeofday(void);
+extern void shim_nanosleep(void);
+extern void shim_usleep(void);
+extern void shim_sleep(void);
+extern void shim_times(void);
+extern void shim_alarm(void);
+extern void shim_clock(void);
+extern void shim_clock_getres(void);
+
+/*==============================================================================
  * Extern declarations - Standard C library
  *============================================================================*/
 extern void fprintf(void);
@@ -236,6 +249,19 @@ const struct esp_elfsym g_customer_elfsyms[] = {
     { "signal", &shim_signal },
     { "raise", &shim_raise },
     { "kill", &shim_kill },
+
+    /*--------------------------------------------------------------------------
+     * Time API - NEW (Feb 2026)
+     *------------------------------------------------------------------------*/
+    { "clock_gettime", &shim_clock_gettime },
+    { "gettimeofday", &shim_gettimeofday },
+    { "nanosleep", &shim_nanosleep },
+    { "usleep", &shim_usleep },
+    { "sleep", &shim_sleep },
+    { "times", &shim_times },
+    { "alarm", &shim_alarm },
+    { "clock", &shim_clock },
+    { "clock_getres", &shim_clock_getres },
 
     /*--------------------------------------------------------------------------
      * String/number conversion

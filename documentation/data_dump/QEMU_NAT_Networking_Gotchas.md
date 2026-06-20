@@ -8,28 +8,28 @@ QEMU's user-mode networking (`-nic user,model=open_eth`) provides NAT-based netw
 
 ## Key Gotchas
 
-### 1. Idle Connection Timeouts
+### 1. Idle Connection Timeouts & Buffer Exhaustion
 
-**Problem:** Connections that appear idle may be closed by QEMU's NAT stack.
+**Problem:** 
+1. Connections that appear idle may be closed by QEMU's NAT stack.
+2. Sending too much data too fast overwhelms the ESP32 LwIP stack (Out of Memory/PBUF exhaustion).
 
-**Symptoms:**
-```
-WinError 10053: An established connection was aborted by the software in your host machine
-WinError 10054: An existing connection was forcibly closed by the remote host
-```
+**Solution:** Use a "Slow and Steady" chunked approach.
 
-**Cause:** Application-level chunked sending with delays makes connections appear idle:
+**Tested Optimal Values for ESP32 QEMU:**
+*   **ELF Binary Transfer:** 1024-byte chunks with 50ms delay.
+*   **Text Data Transfer:** 128-byte chunks with 50ms delay.
+*   **Post-ELF Load Wait:** Wait at least 2.0s after sending ELF before sending data (allows relocation/startup).
+
 ```python
-# BAD: Creates idle periods that trigger timeouts
-for chunk in chunks:
-    socket.sendall(chunk)
-    time.sleep(0.01)  # NAT sees this as idle
-```
-
-**Solution:** Send data without artificial delays:
-```python
-# GOOD: Let TCP handle segmentation
-socket.sendall(all_data)
+def send_chunked(sock, data, chunk_size=1024, delay=0.05):
+    total_len = len(data)
+    bytes_sent = 0
+    while bytes_sent < total_len:
+        chunk = data[bytes_sent : bytes_sent + chunk_size]
+        sock.sendall(chunk)
+        bytes_sent += len(chunk)
+        time.sleep(delay)
 ```
 
 ### 2. Limited Concurrent Connections

@@ -44,11 +44,7 @@ except ImportError:
 QEMU_PATH = r"C:\Users\Dhruv\.espressif\tools\qemu-xtensa\esp_develop_9.0.0_20240606\qemu\bin\qemu-system-xtensa.exe"
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MERGED_FLASH = os.path.join(PROJECT_ROOT, "build", "merged-flash.bin")
-WORKER_ELF = os.path.join(PROJECT_ROOT, "data", "map_reduce_worker.elf")
-MATH_WORKER_ELF = os.path.join(PROJECT_ROOT, "data", "math_worker.elf")
-
-# Worker mode (set by command line)
-g_worker_mode = "simple"  # "simple" or "math"
+WORKER_ELF = os.path.join(PROJECT_ROOT, "build", "guest_apps", "map_reduce_worker.elf")
 
 # Node configuration - 4 ESP32 instances with different ports
 NODES = [
@@ -94,6 +90,42 @@ def strip_ansi(text):
     # Also remove any stray [ followed by single letter (broken escape)
     text = re.sub(r'\[([A-Z])\[', '[', text)
     return text
+
+
+def build_system():
+    """Build guest apps and firmware."""
+    print(f"{YELLOW}Step 1/3: Building guest applications...{RESET}")
+    try:
+        # Clean data directory to prevent flash overflow
+        data_dir = os.path.join(PROJECT_ROOT, "data")
+        if os.path.exists(data_dir):
+            for f in os.listdir(data_dir):
+                if f.endswith(".elf"):
+                    try:
+                        os.remove(os.path.join(data_dir, f))
+                    except: pass
+
+        # Build both guest apps in one go (copies to data/)
+        subprocess.check_call([sys.executable, "tools/build_and_run.py", "--build-guest", "c2_bot", "--build-guest", "map_reduce_worker", "--guest-only"], cwd=PROJECT_ROOT)
+        
+        # Remove map_reduce_worker from data/ so it's not packed into flash (we send it over network)
+        # This prevents "No space left on device" errors
+        worker_in_data = os.path.join(data_dir, "map_reduce_worker.elf")
+        if os.path.exists(worker_in_data):
+            os.remove(worker_in_data)
+
+        print(f"{YELLOW}Step 2/2: Configuring and building firmware...{RESET}")
+        # Set default ELF and build/merge in one command
+        subprocess.check_call([sys.executable, "tools/build_and_run.py", "--set-elf", "c2_bot", "--build", "--merge"], cwd=PROJECT_ROOT)
+        
+        print(f"{GREEN}Build complete!{RESET}")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"{RED}Build command failed with error code {e.returncode}{RESET}")
+        return False
+    except Exception as e:
+        print(f"{RED}Build failed: {e}{RESET}")
+        return False
 
 
 # Global state
@@ -239,7 +271,7 @@ def draw_ui(first_draw=False):
 
     # Command bar at bottom
     output.append(f"{DIM}{'-' * width}{RESET}")
-    output.append(f"{BOLD}Commands:{RESET} [r] Simple  [m] Math Worker  [c] Clear  [q] Quit")
+    output.append(f"{BOLD}Commands:{RESET} [r] Run Map-Reduce  [c] Clear  [q] Quit")
 
     # Build full output with line clearing for clean overwrites
     # Use \033[K to clear to end of line - prevents artifacts
@@ -356,7 +388,20 @@ def wait_for_node_ready(port, timeout=30):
     return False
 
 
-def send_worker_job(node_id, port, data_chunk, worker_type="simple"):
+def send_chunked(sock, data, chunk_size=512, delay=0.05):
+    """
+    Send data in chunks to avoid overwhelming the ESP32 LwIP stack.
+    Slow and steady prevents pbuf exhaustion and "Out of memory" errors.
+    """
+    total_len = len(data)
+    bytes_sent = 0
+    while bytes_sent < total_len:
+        chunk = data[bytes_sent : bytes_sent + chunk_size]
+        sock.sendall(chunk)
+        bytes_sent += len(chunk)
+        time.sleep(delay)
+
+def send_worker_job(node_id, port, data_chunk):
     """
     Send a map-reduce job to a node.
 
@@ -367,18 +412,13 @@ def send_worker_job(node_id, port, data_chunk, worker_type="simple"):
     4. Wait for worker to start, then send data
     5. Close write end to signal EOF
     6. Read result
-
-    worker_type: "simple" (sum only) or "math" (uses math functions)
     """
     s = None
     try:
         log_node(node_id, "[CONN] Connecting...")
 
-        # Select worker ELF based on type
-        worker_path = MATH_WORKER_ELF if worker_type == "math" else WORKER_ELF
-
         # Read worker ELF
-        with open(worker_path, 'rb') as f:
+        with open(WORKER_ELF, 'rb') as f:
             elf_data = f.read()
 
         # Connect to node with TCP keepalive
@@ -388,19 +428,23 @@ def send_worker_job(node_id, port, data_chunk, worker_type="simple"):
         s.connect(('localhost', port))
         log_node(node_id, "[CONN] Connected!")
 
-        # Send ELF size header + ELF data in one go (no chunking delays)
+        # Send ELF size header
+        # Send header separately to ensure it's processed
+        s.sendall(struct.pack('<I', len(elf_data)))
+        
+        # Send ELF data chunked
         log_node(node_id, f"[SEND] ELF ({len(elf_data)} bytes)...")
-        s.sendall(struct.pack('<I', len(elf_data)) + elf_data)
+        send_chunked(s, elf_data, chunk_size=1024, delay=0.05)
         log_node(node_id, "[SEND] ELF sent, waiting...")
 
         # Wait for worker to start and be ready for data
         # ESP32 needs time to load and relocate ELF
-        time.sleep(1.5)
+        time.sleep(2.0)
 
-        # Send the data (numbers as newline-separated string) - all at once
+        # Send the data (numbers as newline-separated string) - chunked
         log_node(node_id, f"[DATA] Sending {len(data_chunk)} numbers...")
         data_str = "\n".join(str(x) for x in data_chunk) + "\n"
-        s.sendall(data_str.encode('utf-8'))
+        send_chunked(s, data_str.encode('utf-8'), chunk_size=128, delay=0.05)
         log_node(node_id, "[DATA] Data sent!")
 
         # Signal EOF by closing write side
@@ -425,39 +469,22 @@ def send_worker_job(node_id, port, data_chunk, worker_type="simple"):
         # Parse result
         text = response.decode('utf-8', errors='replace')
 
-        if worker_type == "math":
-            # Parse math worker result: "RESULT: LINEAR_SUM=X TRIG_AVG=Y GEO_MEAN=Z RMS=W COUNT=N"
-            match = re.search(r"RESULT:\s*LINEAR_SUM=(-?\d+)\s+TRIG_AVG=([\d.]+)\s+GEO_MEAN=([\d.]+)\s+RMS=([\d.]+)\s+COUNT=(\d+)", text)
-            if match:
-                linear_sum = int(match.group(1))
-                trig_avg = float(match.group(2))
-                geo_mean = float(match.group(3))
-                rms = float(match.group(4))
-                count = int(match.group(5))
-                log_master(f"{CHECK} Node {node_id}: sum={linear_sum}, trig_avg={trig_avg:.4f}", GREEN)
-                log_node(node_id, f"[DONE] sum={linear_sum}")
-                return {"linear_sum": linear_sum, "trig_avg": trig_avg, "geo_mean": geo_mean, "rms": rms, "count": count}
-            else:
-                log_master(f"{CROSS} Node {node_id}: Invalid math response", RED)
-                log_node(node_id, f"[ERR] Bad response")
-                return None
+        # Parse simple worker result: "RESULT: SUM=X COUNT=Y"
+        match = re.search(r"RESULT:\s*SUM=(\d+)\s+COUNT=(\d+)", text)
+        if match:
+            result_sum = int(match.group(1))
+            result_count = int(match.group(2))
+            log_master(f"{CHECK} Node {node_id}: sum={result_sum}, count={result_count}", GREEN)
+            return result_sum, result_count
         else:
-            # Parse simple worker result: "RESULT: SUM=X COUNT=Y"
-            match = re.search(r"RESULT:\s*SUM=(\d+)\s+COUNT=(\d+)", text)
-            if match:
-                result_sum = int(match.group(1))
-                result_count = int(match.group(2))
-                log_master(f"{CHECK} Node {node_id}: sum={result_sum}, count={result_count}", GREEN)
-                return result_sum, result_count
-            else:
-                log_master(f"{CROSS} Node {node_id}: Invalid response", RED)
-                log_node(node_id, f"[ERR] Bad response")
-                return 0, 0
+            log_master(f"{CROSS} Node {node_id}: Invalid response", RED)
+            log_node(node_id, f"[ERR] Bad response")
+            return 0, 0
 
     except Exception as e:
         log_master(f"{CROSS} Node {node_id} failed: {e}", RED)
         log_node(node_id, f"[ERR] {str(e)[:30]}")
-        return None if worker_type == "math" else (0, 0)
+        return 0, 0
     finally:
         if s:
             try:
@@ -466,10 +493,10 @@ def send_worker_job(node_id, port, data_chunk, worker_type="simple"):
                 pass
 
 
-def run_mapreduce_demo(live_ui=True, worker_type="simple"):
+def run_mapreduce_demo(live_ui=True):
     """Run a distributed map-reduce computation across all nodes."""
     log_master("=" * 40, CYAN)
-    log_master(f"Starting Map-Reduce Job ({worker_type} worker)", CYAN)
+    log_master(f"Starting Map-Reduce Job", CYAN)
     log_master("=" * 40, CYAN)
 
     # Generate test data: sum of 1 to 1000
@@ -504,15 +531,11 @@ def run_mapreduce_demo(live_ui=True, worker_type="simple"):
         # Retry logic - try up to 2 times
         result = None
         for attempt in range(2):
-            result = send_worker_job(node_id, node['port'], chunk, worker_type=worker_type)
+            result = send_worker_job(node_id, node['port'], chunk)
 
             # Check if successful
-            if worker_type == "math":
-                if result is not None:
-                    break
-            else:
-                if result[0] > 0:
-                    break
+            if result[0] > 0:
+                break
 
             # Failed - retry after delay
             if attempt < 1:
@@ -521,16 +544,11 @@ def run_mapreduce_demo(live_ui=True, worker_type="simple"):
 
         results[idx] = result
         job_done[idx] = True
-        if worker_type == "math":
-            if result is not None:
-                log_node(node_id, f"[DONE] sum={result['linear_sum']}")
-            else:
-                log_node(node_id, f"[FAIL] Job failed!")
+        
+        if result[0] > 0:
+            log_node(node_id, f"[DONE] sum={result[0]}")
         else:
-            if result[0] > 0:
-                log_node(node_id, f"[DONE] sum={result[0]}")
-            else:
-                log_node(node_id, f"[FAIL] Job failed!")
+            log_node(node_id, f"[FAIL] Job failed!")
 
     # Stagger thread starts by 0.4 seconds each to reduce contention
     for i, node in enumerate(NODES):
@@ -552,67 +570,30 @@ def run_mapreduce_demo(live_ui=True, worker_type="simple"):
     for t in threads:
         t.join(timeout=60)
 
-    # Aggregate results based on worker type
-    if worker_type == "math":
-        total_sum = 0
-        total_count = 0
-        trig_avg_sum = 0.0
-        valid_nodes = 0
+    # Simple worker aggregation
+    total_sum = 0
+    total_count = 0
+    for r in results:
+        if r is not None and isinstance(r, tuple):
+            total_sum += r[0]
+            total_count += r[1]
 
-        for r in results:
-            if r is not None:
-                total_sum += r['linear_sum']
-                total_count += r['count']
-                trig_avg_sum += r['trig_avg']
-                valid_nodes += 1
+    # Calculate expected value
+    expected_sum = sum(range(1, 1001))  # 500500
 
-        # Calculate expected values
-        expected_sum = sum(range(1, 1001))  # 500500
-        expected_trig_avg = 1.0  # sin^2 + cos^2 = 1
+    # Report results
+    log_master("=" * 40, CYAN)
+    log_master(f"Job Complete!", BOLD)
+    log_master(f"  Total Sum:    {total_sum}")
+    log_master(f"  Total Count:  {total_count}")
+    log_master(f"  Expected Sum: {expected_sum}")
 
-        # Report results
-        log_master("=" * 40, CYAN)
-        log_master(f"Math Worker Job Complete!", BOLD)
-        log_master(f"  Total Sum:      {total_sum}")
-        log_master(f"  Total Count:    {total_count}")
-        log_master(f"  Expected Sum:   {expected_sum}")
-        if valid_nodes > 0:
-            avg_trig = trig_avg_sum / valid_nodes
-            log_master(f"  Avg Trig Check: {avg_trig:.4f} (expect ~1.0)")
-
-        if total_sum == expected_sum and total_count == 1000:
-            log_master(f"{CHECK} SUCCESS: Sum matches perfectly!", GREEN)
-            if valid_nodes > 0 and abs(avg_trig - 1.0) < 0.01:
-                log_master(f"{CHECK} Math identity verified!", GREEN)
-            return True
-        else:
-            log_master(f"{CROSS} MISMATCH: Results don't match!", RED)
-            return False
+    if total_sum == expected_sum and total_count == 1000:
+        log_master(f"{CHECK} SUCCESS: Results match perfectly!", GREEN)
+        return True
     else:
-        # Simple worker aggregation
-        total_sum = 0
-        total_count = 0
-        for r in results:
-            if r is not None and isinstance(r, tuple):
-                total_sum += r[0]
-                total_count += r[1]
-
-        # Calculate expected value
-        expected_sum = sum(range(1, 1001))  # 500500
-
-        # Report results
-        log_master("=" * 40, CYAN)
-        log_master(f"Job Complete!", BOLD)
-        log_master(f"  Total Sum:    {total_sum}")
-        log_master(f"  Total Count:  {total_count}")
-        log_master(f"  Expected Sum: {expected_sum}")
-
-        if total_sum == expected_sum and total_count == 1000:
-            log_master(f"{CHECK} SUCCESS: Results match perfectly!", GREEN)
-            return True
-        else:
-            log_master(f"{CROSS} MISMATCH: Results don't match!", RED)
-            return False
+        log_master(f"{CROSS} MISMATCH: Results don't match!", RED)
+        return False
 
 
 def start_cluster(startup_timeout=20):
@@ -631,36 +612,12 @@ def start_cluster(startup_timeout=20):
         g_node_threads[node['id']] = runner
         time.sleep(0.5)  # Stagger startup slightly
 
-    # Wait for all nodes to be ready by checking for "Waiting for payload..." in logs
-    log_master("Waiting for nodes to initialize...", YELLOW)
-    log_master("Looking for 'Waiting for payload...' in QEMU output", DIM)
-    time.sleep(5)  # Initial wait for nodes to boot and start C2 server
+    # Wait for all nodes to be ready (Simple timer mode)
+    log_master("Waiting 10 seconds for nodes to stabilize...", YELLOW)
+    time.sleep(10)
 
-    ready_count = 0
-    for i, node in enumerate(NODES):
-        if i > 0:
-            time.sleep(0.5)  # Stagger checks
-        log_master(f"  Checking Node {node['id']} logs...", DIM)
-        # Use log-based ready check - waits for "[Bot] Waiting for payload..." + 1s
-        if wait_for_node_ready(node['id'], timeout=startup_timeout):
-            log_master(f"  {CHECK} Node {node['id']} ready (saw 'Waiting for payload')", GREEN)
-            ready_count += 1
-        else:
-            # Fallback to port check if log message not found
-            log_master(f"  Log check failed, trying port {node['port']}...", YELLOW)
-            if wait_for_node_ready(node['port'], timeout=10):
-                log_master(f"  {CHECK} Node {node['id']} port ready (fallback)", GREEN)
-                ready_count += 1
-                time.sleep(1)  # Extra wait since log wasn't seen
-            else:
-                log_master(f"  {CROSS} Node {node['id']} failed to start", RED)
-
-    if ready_count == len(NODES):
-        log_master(f"All {len(NODES)} nodes ready!", GREEN)
-        return True
-    else:
-        log_master(f"Only {ready_count}/{len(NODES)} nodes ready", YELLOW)
-        return ready_count > 0
+    log_master(f"Cluster started.", GREEN)
+    return True
 
 
 def stop_cluster():
@@ -683,7 +640,7 @@ def interactive_mode():
     global g_running
 
     log_master("Interactive mode started", CYAN)
-    log_master("Press 'r' simple, 'm' math, 'c' clear, 'q' quit", WHITE)
+    log_master("Press 'r' to run, 'c' clear, 'q' quit", WHITE)
 
     last_draw = 0
     draw_interval = 0.5  # Redraw every 500ms
@@ -706,13 +663,9 @@ def interactive_mode():
                     g_running = False
                     break
                 elif key == 'r':
-                    log_master("Starting simple map-reduce job...", CYAN)
-                    run_mapreduce_demo(live_ui=True, worker_type="simple")
-                    log_master("Press 'r' simple, 'm' math, 'q' quit", WHITE)
-                elif key == 'm':
-                    log_master("Starting MATH map-reduce job...", CYAN)
-                    run_mapreduce_demo(live_ui=True, worker_type="math")
-                    log_master("Press 'r' simple, 'm' math, 'q' quit", WHITE)
+                    log_master("Starting map-reduce job...", CYAN)
+                    run_mapreduce_demo(live_ui=True)
+                    log_master("Press 'r' to run, 'c' clear, 'q' quit", WHITE)
                 elif key == 'c':
                     # Clear logs
                     with g_log_lock:
@@ -727,9 +680,9 @@ def interactive_mode():
         g_running = False
 
 
-def auto_mode(worker_type="simple"):
+def auto_mode():
     """Run automated test and exit with live UI."""
-    log_master(f"Auto mode: Running {worker_type} test...", CYAN)
+    log_master(f"Auto mode: Running test...", CYAN)
 
     # Clear screen and start UI
     clear_screen()
@@ -739,10 +692,10 @@ def auto_mode(worker_type="simple"):
     draw_ui(first_draw=True)
     time.sleep(3)
 
-    log_master(f"Executing {worker_type} map-reduce job...", CYAN)
+    log_master(f"Executing map-reduce job...", CYAN)
 
     # Run with live UI so you can see what's happening
-    success = run_mapreduce_demo(live_ui=True, worker_type=worker_type)
+    success = run_mapreduce_demo(live_ui=True)
 
     # Final UI update with results
     draw_ui(first_draw=False)
@@ -750,7 +703,7 @@ def auto_mode(worker_type="simple"):
 
     # Print final summary
     print("\n" + "=" * 50)
-    print(f"MAP-REDUCE TEST RESULT ({worker_type.upper()} WORKER)")
+    print(f"MAP-REDUCE TEST RESULT")
     print("=" * 50)
 
     # Print master log
@@ -776,41 +729,43 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python c2_master.py              # Interactive mode
-  python c2_master.py --auto       # Automated test (simple worker)
-  python c2_master.py --auto --math # Automated test with math worker
-  python c2_master.py --timeout 30 # Custom startup timeout
+  python c2_master.py              # Interactive mode (builds automatically)
+  python c2_master.py --no-build   # Skip build, run interactive
+  python c2_master.py --auto       # Automated test
+  python c2_master.py --timeout 60 # Custom startup timeout
 """
     )
     parser.add_argument("--auto", action="store_true",
                        help="Run automated test and exit")
-    parser.add_argument("--math", action="store_true",
-                       help="Use math worker (with trig functions) instead of simple worker")
+    parser.add_argument("--no-build", action="store_true",
+                       help="Skip the build process (use existing binaries)")
     parser.add_argument("--timeout", type=int, default=40,
-                       help="Node startup timeout in seconds (default: 40, recommend 40+ for 4 nodes)")
+                       help="Node startup timeout in seconds (default: 40)")
     parser.add_argument("--nodes", type=int, default=4, choices=[1, 2, 3, 4],
                        help="Number of nodes to use (default: 4)")
 
     args = parser.parse_args()
-
-    worker_type = "math" if args.math else "simple"
 
     # Limit number of nodes if requested
     global NODES
     if args.nodes < 4:
         NODES = NODES[:args.nodes]
 
+    # Build system unless requested otherwise
+    if not args.no_build:
+        print(f"{CYAN}Building system and guest apps...{RESET}")
+        if not build_system():
+            print(f"{RED}Build failed!{RESET}")
+            return 1
+    
     # Verify prerequisites
     if not os.path.exists(MERGED_FLASH):
         print(f"{RED}ERROR: Flash image not found: {MERGED_FLASH}{RESET}")
-        print("Run: python tools/build_and_run.py --build")
+        print("Run without --no-build or fix build errors.")
         return 1
 
-    worker_elf = MATH_WORKER_ELF if args.math else WORKER_ELF
-    if not os.path.exists(worker_elf):
-        print(f"{RED}ERROR: Worker ELF not found: {worker_elf}{RESET}")
-        worker_name = "math_worker" if args.math else "map_reduce_worker"
-        print(f"Run: python tools/build_and_run.py --build-guest {worker_name}")
+    if not os.path.exists(WORKER_ELF):
+        print(f"{RED}ERROR: Worker ELF not found: {WORKER_ELF}{RESET}")
         return 1
 
     if not os.path.exists(QEMU_PATH):
@@ -844,7 +799,7 @@ Examples:
                 print(f"{color}{msg}{RESET}")
 
         if args.auto:
-            result = auto_mode(worker_type=worker_type)
+            result = auto_mode()
         else:
             interactive_mode()
             result = 0

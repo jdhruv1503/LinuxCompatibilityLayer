@@ -86,6 +86,23 @@ EXPORT_SYMBOLS = [
     ("shim_raise", "raise"),
     ("shim_kill", "kill"),
 
+    # Time shims
+    ("shim_clock_gettime", "clock_gettime"),
+    ("shim_gettimeofday", "gettimeofday"),
+    ("shim_nanosleep", "nanosleep"),
+    ("shim_usleep", "usleep"),
+    ("shim_sleep", "sleep"),
+    ("shim_times", "times"),
+    ("shim_alarm", "alarm"),
+    ("shim_clock", "clock"),
+    ("shim_clock_getres", "clock_getres"),
+
+    # Memory management
+    "malloc",
+    "free",
+    "calloc",
+    "realloc",
+
     # C2 Pipe VFS driver functions
     "vfs_c2_pipe_register",
     "c2_pipe_set_socket",

@@ -344,36 +344,46 @@ def run_simulation(timeout=DEFAULT_TIMEOUT, networking=True, c2_mode=False, port
             log("QEMU stopped")
         return
 
-    # Standard mode: Run with timeout and capture output
+    # Standard mode: Real-time output with timeout
+    # Let QEMU inherit stdout/stderr directly (no pipe = no buffering)
+    import threading
+
     try:
         log("=" * 60)
         log("QEMU OUTPUT START")
         log("=" * 60)
+        sys.stdout.flush()
 
-        output = subprocess.check_output(
-            qemu_cmd,
-            stderr=subprocess.STDOUT,
-            timeout=timeout,
-            text=True
-        )
+        proc = subprocess.Popen(qemu_cmd)
 
-        print(output)
+        def kill_proc():
+            log(f"\n[INFO] QEMU timeout ({timeout}s) - simulation complete")
+            proc.terminate()
+            try:
+                proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+
+        timer = threading.Timer(timeout, kill_proc)
+        timer.start()
+
+        try:
+            proc.wait()
+        except KeyboardInterrupt:
+            log("\nStopping QEMU...")
+            proc.terminate()
+            try:
+                proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+        finally:
+            timer.cancel()
+
         log("=" * 60)
-        log("QEMU exited normally")
-
-    except subprocess.TimeoutExpired as e:
-        # This is expected - QEMU doesn't exit on its own
-        if e.output:
-            print(e.output)
-        log("=" * 60)
-        log(f"QEMU timeout ({timeout}s) - simulation complete")
-
-    except subprocess.CalledProcessError as e:
-        log("=" * 60)
-        log(f"QEMU exited with code {e.returncode}")
-        if e.output:
-            print(e.output)
-        # Don't error out - non-zero exit might be normal
+        if proc.returncode == 0:
+            log("QEMU exited normally")
+        else:
+            log("QEMU stopped")
 
     except Exception as e:
         error(f"QEMU execution failed: {e}")
@@ -480,23 +490,51 @@ C2 Demo Testing:
                        help="Demo 2: forward ports 80 & 9000, run interactively")
     parser.add_argument("--port", "-p", type=int, default=9000,
                        help="Port to forward in C2/sim mode (default: 9000)")
-    parser.add_argument("--build-guest", type=str, default=None,
+    parser.add_argument("--build-guest", type=str, action='append',
                        help="Build guest app with given name (e.g., c2_payload)")
     parser.add_argument("--set-elf", type=str, default=None,
                        help="Set default ELF in main.c (e.g., c2_payload)")
+    parser.add_argument("--guest-only", action="store_true",
+                       help="Only build guest apps, do not run full workflow or simulation.")
 
     args = parser.parse_args()
     VERBOSE = args.verbose
 
     # If no specific action, run full workflow
-    specific_action = args.build or args.export or args.merge or args.sim
+    specific_action_explicitly_do_something_else = args.build or args.export or args.merge or args.sim
+
+    # Determine ports to forward
+    ports = args.port
+    if args.demo2:
+        ports = [80, 9000] # HTTP server and C2 server
+        args.c2 = True  # Demo 2 implies interactive mode
+
+        # Demo 2 requires collision_server (the HTTP server) and collision_guard (the computational ELF)
+        if args.build_guest is None:
+            args.build_guest = []
+        if "collision_server" not in args.build_guest:
+            args.build_guest.append("collision_server")
+        if "collision_guard" not in args.build_guest:
+            args.build_guest.append("collision_guard")
+            
+        # Set collision_server as the default ELF to run
+        if args.set_elf is None:
+            args.set_elf = "collision_server"
 
     os.chdir(PROJECT_ROOT)
 
     try:
         # Handle guest app building
         if args.build_guest:
-            build_guest_app(args.build_guest)
+            for app in args.build_guest:
+                elf_path = build_guest_app(app)
+                # Copy to data directory so it gets packed into LittleFS
+                data_dir = os.path.join(PROJECT_ROOT, "data")
+                if not os.path.exists(data_dir):
+                    os.makedirs(data_dir)
+                dest_path = os.path.join(data_dir, f"{app}.elf")
+                shutil.copy2(elf_path, dest_path)
+                log(f"Copied {app}.elf to data directory")
 
         # Handle ELF path setting
         if args.set_elf:
@@ -504,19 +542,14 @@ C2 Demo Testing:
 
         if args.clean:
             clean_build()
+        
+        # If --guest-only is set and no other specific action requested, we exit here.
+        if args.guest_only and not specific_action_explicitly_do_something_else:
+            log("Guest apps built. Skipping full workflow as --guest-only was specified.")
+            return
 
-        # Handle Demo 2 flag implication
-        if args.demo2:
-            args.c2 = True
-
-        # Determine ports to forward
-        ports = []
-        if args.demo2:
-            ports = [80, 9000]
-        elif args.c2:
-            ports = [args.port]
-
-        if specific_action:
+        # If any specific action (build, export, merge, sim) is requested, execute them.
+        if specific_action_explicitly_do_something_else:
             # Run specific actions
             if args.build:
                 check_prerequisites()
@@ -530,7 +563,7 @@ C2 Demo Testing:
                 run_simulation(timeout=args.timeout, networking=not args.no_net,
                              c2_mode=args.c2, port_forward=ports)
         else:
-            # Full workflow
+            # If no specific action (including --guest-only) was requested, run full workflow.
             full_workflow(timeout=args.timeout, networking=not args.no_net, c2_mode=args.c2, port_forward=ports)
 
     except KeyboardInterrupt:

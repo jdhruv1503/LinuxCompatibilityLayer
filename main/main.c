@@ -12,7 +12,6 @@
  * - Devices: VFS-based device drivers (/dev/c2, /dev/collision, etc.)
  */
 
-#include <stdio.h>
 #include <string.h>
 #include <dirent.h>
 #include <sys/stat.h>
@@ -27,6 +26,8 @@
 
 // Driver subsystem
 #include "drivers/drivers.h"
+
+
 
 static const char *TAG = "kernel_main";
 
@@ -43,7 +44,7 @@ extern void lcl_heap_print_all(void);
 
 // Default ELF to execute on boot
 // Updated via build_and_run.py --set-elf <app_name>
-#define DEFAULT_ELF_PATH "/linux/collision_server.elf"
+#define DEFAULT_ELF_PATH "/linux/energy_mgmt.elf"
 
 #include <math.h>
 
@@ -192,6 +193,9 @@ void app_main(void)
     esp_log_level_set("drv_devices", ESP_LOG_WARN);
     esp_log_level_set("kernel_main", ESP_LOG_INFO);
     esp_log_level_set("c2_bot", ESP_LOG_INFO);
+    esp_log_level_set("c2_server", ESP_LOG_INFO);
+    esp_log_level_set("telemetry_bridge", ESP_LOG_INFO);
+
 
     // Initialize all drivers via unified driver subsystem
     ESP_LOGI(TAG, "Initializing driver subsystem...");
@@ -201,6 +205,8 @@ void app_main(void)
         ESP_LOGE(TAG, "Driver initialization failed!");
         return;
     }
+
+
 
     // List available ELF files
     list_elf_files();
@@ -231,6 +237,6 @@ void app_main(void)
     }
 
     ESP_LOGI(TAG, "============================================");
-    ESP_LOGI(TAG, "Kernel idle - ELF loader ready");
+    ESP_LOGI(TAG, "Kernel idle - All services started");
     ESP_LOGI(TAG, "============================================");
 }

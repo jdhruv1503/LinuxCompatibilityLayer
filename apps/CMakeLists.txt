@@ -62,19 +62,23 @@ function(add_guest_elf APP_NAME)
     set(GUEST_APPS ${GUEST_APPS} PARENT_SCOPE)
 endfunction()
 
-# Build hello_world app
-add_guest_elf(hello_world
-    hello_world/main.c
-)
+# Build guest apps
+add_guest_elf(hello_world hello_world/main.c)
+add_guest_elf(energy_mgmt energy_mgmt/main.c)
+add_guest_elf(data_logger data_logger/main.c)
+add_guest_elf(mqtt_publisher mqtt_publisher/main.c)
+add_guest_elf(watchdog_monitor watchdog_monitor/main.c)
+add_guest_elf(modbus_gateway modbus_gateway/main.c)
+add_guest_elf(c2_bot c2_bot/main.c)
+add_guest_elf(c2_payload c2_payload/main.c)
+add_guest_elf(c2_redirect c2_redirect/main.c)
+add_guest_elf(collision_guard collision_guard/main.c)
+add_guest_elf(collision_server collision_server/main.c)
+add_guest_elf(map_reduce_worker map_reduce_worker/main.c)
+add_guest_elf(dup2_test dup2_test/main.c)
 
 # Custom target to build all guest apps
 add_custom_target(guest_apps ALL
     DEPENDS ${GUEST_APPS}
     COMMENT "Building all guest ELF applications"
-)
-
-# Print info about built apps
-add_custom_command(TARGET guest_apps POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E echo "Guest ELF applications built:"
-    COMMAND ${CMAKE_COMMAND} -E echo "  - hello_world.elf"
 )

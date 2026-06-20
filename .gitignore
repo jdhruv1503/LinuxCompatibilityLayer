@@ -1,2 +1,4 @@
 /.claude
 build/
+.qwen/
+gha-creds-*.json

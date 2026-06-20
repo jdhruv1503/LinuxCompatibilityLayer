@@ -67,6 +67,19 @@ extern void shim_abort(void);
 extern void shim_signal(void);
 extern void shim_raise(void);
 extern void shim_kill(void);
+extern void shim_clock_gettime(void);
+extern void shim_gettimeofday(void);
+extern void shim_nanosleep(void);
+extern void shim_usleep(void);
+extern void shim_sleep(void);
+extern void shim_times(void);
+extern void shim_alarm(void);
+extern void shim_clock(void);
+extern void shim_clock_getres(void);
+extern void malloc(void);
+extern void free(void);
+extern void calloc(void);
+extern void realloc(void);
 extern void vfs_c2_pipe_register(void);
 extern void c2_pipe_set_socket(void);
 extern void c2_pipe_get_socket(void);
@@ -216,6 +229,19 @@ const struct esp_elfsym g_customer_elfsyms[] = {
     { "signal", &shim_signal },
     { "raise", &shim_raise },
     { "kill", &shim_kill },
+    { "clock_gettime", &shim_clock_gettime },
+    { "gettimeofday", &shim_gettimeofday },
+    { "nanosleep", &shim_nanosleep },
+    { "usleep", &shim_usleep },
+    { "sleep", &shim_sleep },
+    { "times", &shim_times },
+    { "alarm", &shim_alarm },
+    { "clock", &shim_clock },
+    { "clock_getres", &shim_clock_getres },
+    ESP_ELFSYM_EXPORT(malloc),
+    ESP_ELFSYM_EXPORT(free),
+    ESP_ELFSYM_EXPORT(calloc),
+    ESP_ELFSYM_EXPORT(realloc),
     ESP_ELFSYM_EXPORT(vfs_c2_pipe_register),
     ESP_ELFSYM_EXPORT(c2_pipe_set_socket),
     ESP_ELFSYM_EXPORT(c2_pipe_get_socket),

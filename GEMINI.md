@@ -276,16 +276,26 @@ CONFIG_ETH_USE_ESP32_EMAC=n
 
    # GOOD: Let TCP handle segmentation
    socket.sendall(all_data)  # Single call, TCP handles chunking
-   ```
-
-7. **Stagger Parallel Operations**: When connecting to multiple QEMU instances, stagger operations to avoid overwhelming NAT:
-   ```python
-   for i, node in enumerate(nodes):
-       time.sleep(i * 0.4)  # 400ms stagger
-       connect_to_node(node)
-   ```
-
-### ESP-IDF Build Issues
+      ```
+   
+   7.  **Stagger Parallel Operations**: When connecting to multiple QEMU instances, stagger operations to avoid overwhelming NAT:
+      ```python
+      for i, node in enumerate(nodes):
+          time.sleep(i * 0.4)  # 400ms stagger
+          connect_to_node(node)
+      ```
+   
+   8.  **Buffered I/O for Sockets**: When reading from sockets (or redirected stdin) in guest apps, ALWAYS use buffered reading (read large chunks) instead of byte-by-byte reads. Byte-by-byte reads cause massive syscall overhead and can trigger timeouts.
+       ```c
+       // BAD: read(fd, &c, 1);
+       // GOOD: read(fd, buf, 1024);
+       ```
+   
+   9.  **Throttled Sending**: When sending large data to ESP32 QEMU, break it into chunks with small delays to prevent LwIP buffer exhaustion.
+       - ELF Transfer: 1024-byte chunks, 50ms delay
+       - Data Transfer: 128-byte chunks, 50ms delay
+   
+   ### ESP-IDF Build Issues
 
 1. **Partition Table Not Found**: If build fails with "Failed to find partition 'linux_fs'", ensure `CONFIG_PARTITION_TABLE_CUSTOM=y` is in `sdkconfig.defaults`, then delete `sdkconfig` and rebuild.
 
