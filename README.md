@@ -221,13 +221,36 @@ python tools/build_and_run.py --build-guest modbus_gateway --set-elf modbus_gate
 
 ---
 
-### Demo 7: Energy Management (PID Control)
+### Demo 7: Building Energy Management System (Multi-Node Dashboard)
 
-**What it shows:** A PID-controlled HVAC simulation running as a guest ELF, targeting 23°C, streaming JSON telemetry to `10.0.2.2:8080` — demonstrating real-time control loops with network output.
+**What it shows:** A full Tkinter GUI dashboard (`tools/energy_mgmt_ui.py`) that spawns up to **8 ESP32 QEMU instances simultaneously**, one per building zone. Each runs the `energy_mgmt` PID-controlled HVAC guest app and streams live JSON telemetry back. The dashboard lets you edit the temperature setpoint, trigger a rebuild, and reflash all 8 nodes in one click.
 
-```bash
-python tools/build_and_run.py --build-guest energy_mgmt --set-elf energy_mgmt --timeout 30
 ```
++--[Lobby & Reception]--+  +--[Office Floor 2]--+  +--[Server Room B1]--+  ...
+|  Iter | Temp | Duty%  |  |  ...               |  |  ...               |
+|   1   | 28.4 |  82.3  |  |  ...               |  |  ...               |
+|   2   | 27.1 |  74.1  |  |  ...               |  |  ...               |
++------------------------+  +--------------------+  +--------------------+
+       [Setpoint: 23.0 C] [Apply] [Build & Flash] [Start] [Stop] [Restart]
+```
+
+**Step 1** — build the firmware with `energy_mgmt` as the default guest:
+```bash
+python tools/build_and_run.py --build-guest energy_mgmt --set-elf energy_mgmt --build
+```
+
+**Step 2** — launch the dashboard:
+```bash
+python tools/energy_mgmt_ui.py           # 8 nodes (default)
+python tools/energy_mgmt_ui.py --nodes 4 # 4 nodes
+```
+
+Features:
+- **Real-time console grid** — scrolling PID output per zone, colour-coded (HEATING/COOLING/IDLE).
+- **Live setpoint edit** — change `SETPOINT_TEMP` in the C source and rebuild all nodes without leaving the UI.
+- **App switcher** — dropdown to swap all nodes between `energy_mgmt`, `data_logger`, `mqtt_publisher`, `modbus_gateway`, or `watchdog_monitor`.
+- **Build log** — streaming build output in a resizable bottom panel.
+- Requires `sv_ttk` for Windows 11 Sun Valley dark theme (optional: `pip install sv-ttk`).
 
 ---
 
