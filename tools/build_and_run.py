@@ -190,19 +190,28 @@ def build_guest_app(app_name):
     log(f"Building guest app: {app_name}...")
     os.chdir(PROJECT_ROOT)
 
-    build_script = os.path.join(PROJECT_ROOT, "tools", "build_guest_app.bat")
-    if not os.path.exists(build_script):
-        error(f"Guest build script not found: {build_script}")
+    if os.name == "nt":
+        build_script = os.path.join(PROJECT_ROOT, "tools", "build_guest_app.bat")
+        if not os.path.exists(build_script):
+            error(f"Guest build script not found: {build_script}")
 
-    run_command(f"tools\\build_guest_app.bat {app_name}")
+        run_command(f"tools\\build_guest_app.bat {app_name}")
+        guest_elf = os.path.join(PROJECT_ROOT, "build", "guest_apps", f"{app_name}.elf")
+    else:
+        makefile = os.path.join(PROJECT_ROOT, "tools", "Makefile.guest")
+        if not os.path.exists(makefile):
+            error(f"Guest makefile not found: {makefile}")
 
-    guest_elf = os.path.join(PROJECT_ROOT, "build", "guest_apps", f"{app_name}.elf")
+        app_dir = os.path.join("apps", app_name)
+        symbols = os.path.join("components", "espressif__elf_loader", "src", "esp_all_symbol.c")
+        run_command(f"make -f tools/Makefile.guest APP={app_dir} SYMBOLS={symbols}")
+        guest_elf = os.path.join(PROJECT_ROOT, app_dir, f"{app_name}.elf")
+
     if not os.path.exists(guest_elf):
         error(f"Guest app build failed - ELF not found: {guest_elf}")
 
     log(f"Guest app built: {guest_elf}")
     return guest_elf
-
 
 def set_default_elf(app_name):
     """Update main.c to set default ELF path for the given app."""

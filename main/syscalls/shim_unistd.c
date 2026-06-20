@@ -17,6 +17,14 @@
 #include <dirent.h>
 #include <stdarg.h>
 #include <sys/ioctl.h>
+#include <stdint.h>
+#include <time.h>
+#include <sys/time.h>
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/queue.h"
+#include "esp_timer.h"
 
 #include "esp_vfs.h"
 #include "esp_log.h"
@@ -27,6 +35,48 @@ static const char *TAG = "shim_unistd";
 // Mount point for the Linux filesystem
 #define MOUNT_POINT "/linux"
 #define MAX_PATH_LEN 256
+
+
+#define PIPE_BASE_FD 10000
+#define MAX_PIPES 4
+#define PIPE_QUEUE_LENGTH 256
+
+typedef struct {
+    bool used;
+    QueueHandle_t queue;
+    int read_fd;
+    int write_fd;
+    bool read_open;
+    bool write_open;
+} shim_pipe_ctx_t;
+
+static shim_pipe_ctx_t s_pipes[MAX_PIPES] = {0};
+
+static shim_pipe_ctx_t *find_pipe_by_fd(int fd, bool *is_read_end) {
+    if (is_read_end) {
+        *is_read_end = false;
+    }
+
+    for (int i = 0; i < MAX_PIPES; i++) {
+        if (!s_pipes[i].used) {
+            continue;
+        }
+        if (fd == s_pipes[i].read_fd) {
+            if (is_read_end) {
+                *is_read_end = true;
+            }
+            return &s_pipes[i];
+        }
+        if (fd == s_pipes[i].write_fd) {
+            if (is_read_end) {
+                *is_read_end = false;
+            }
+            return &s_pipes[i];
+        }
+    }
+
+    return NULL;
+}
 
 /**
  * @brief Translate guest path to host VFS path
@@ -105,6 +155,37 @@ int shim_open(const char *path, int flags, mode_t mode) {
 
 __attribute__((used))
 ssize_t shim_read(int fd, void *buf, size_t count) {
+    bool is_read_end = false;
+    shim_pipe_ctx_t *pipe = find_pipe_by_fd(fd, &is_read_end);
+    if (pipe) {
+        if (!is_read_end) {
+            ESP_LOGD(TAG, "read on pipe write end fd=%d", fd);
+            errno = EBADF;
+            return -1;
+        }
+
+        uint8_t *out = (uint8_t *)buf;
+        size_t i = 0;
+        for (; i < count; i++) {
+            uint8_t ch;
+            if (xQueueReceive(pipe->queue, &ch, 0) != pdTRUE) {
+                break;
+            }
+            out[i] = ch;
+        }
+
+        if (i == 0) {
+            if (!pipe->write_open) {
+                return 0;
+            }
+            errno = EAGAIN;
+            return -1;
+        }
+
+        ESP_LOGD(TAG, "pipe read(fd=%d): %d bytes", fd, (int)i);
+        return (ssize_t)i;
+    }
+
     // Check if stdin is redirected to socket
     if (fd == STDIN_FILENO && g_c2_redirect_state->redirect_stdin &&
         g_c2_redirect_state->socket_fd >= 0) {
@@ -128,6 +209,32 @@ ssize_t shim_read(int fd, void *buf, size_t count) {
 
 __attribute__((used))
 ssize_t shim_write(int fd, const void *buf, size_t count) {
+    bool is_read_end = false;
+    shim_pipe_ctx_t *pipe = find_pipe_by_fd(fd, &is_read_end);
+    if (pipe) {
+        if (is_read_end) {
+            ESP_LOGD(TAG, "write on pipe read end fd=%d", fd);
+            errno = EBADF;
+            return -1;
+        }
+
+        const uint8_t *in = (const uint8_t *)buf;
+        size_t i = 0;
+        for (; i < count; i++) {
+            if (xQueueSend(pipe->queue, &in[i], 0) != pdTRUE) {
+                break;
+            }
+        }
+
+        if (i == 0) {
+            errno = EAGAIN;
+            return -1;
+        }
+
+        ESP_LOGD(TAG, "pipe write(fd=%d): %d bytes", fd, (int)i);
+        return (ssize_t)i;
+    }
+
     // Check if this write should be intercepted for C2 using shared state
     bool is_c2_redirect = (fd == STDOUT_FILENO && g_c2_redirect_state->redirect_stdout) ||
                           (fd == STDERR_FILENO && g_c2_redirect_state->redirect_stderr);
@@ -162,6 +269,26 @@ ssize_t shim_write(int fd, const void *buf, size_t count) {
 
 __attribute__((used))
 int shim_close(int fd) {
+    bool is_read_end = false;
+    shim_pipe_ctx_t *pipe = find_pipe_by_fd(fd, &is_read_end);
+    if (pipe) {
+        if (is_read_end) {
+            pipe->read_open = false;
+        } else {
+            pipe->write_open = false;
+        }
+
+        if (!pipe->read_open && !pipe->write_open) {
+            if (pipe->queue) {
+                vQueueDelete(pipe->queue);
+            }
+            memset(pipe, 0, sizeof(*pipe));
+        }
+
+        ESP_LOGD(TAG, "pipe close(fd=%d)", fd);
+        return 0;
+    }
+
     int ret = close(fd);
     if (ret < 0) {
         ESP_LOGD(TAG, "close(fd=%d) failed: %s", fd, strerror(errno));
@@ -600,4 +727,152 @@ int shim_dup3(int oldfd, int newfd, int flags) {
     // O_CLOEXEC flag is not relevant for ESP32 single-process model
     ESP_LOGD(TAG, "dup3(oldfd=%d, newfd=%d, flags=0x%x)", oldfd, newfd, flags);
     return shim_dup2(oldfd, newfd);
+}
+
+/*==============================================================================
+ * Time/User/System Utilities
+ *============================================================================*/
+
+__attribute__((used))
+int shim_clock_gettime(clockid_t clk_id, struct timespec *tp) {
+    if (!tp) {
+        errno = EINVAL;
+        ESP_LOGD(TAG, "clock_gettime invalid args");
+        return -1;
+    }
+
+    if (clk_id != CLOCK_REALTIME && clk_id != CLOCK_MONOTONIC) {
+        errno = EINVAL;
+        ESP_LOGD(TAG, "clock_gettime unsupported clock id=%d", (int)clk_id);
+        return -1;
+    }
+
+    int64_t us = esp_timer_get_time();
+    tp->tv_sec = us / 1000000;
+    tp->tv_nsec = (us % 1000000) * 1000;
+    ESP_LOGD(TAG, "clock_gettime(%d): %ld.%09ld", (int)clk_id, (long)tp->tv_sec, (long)tp->tv_nsec);
+    return 0;
+}
+
+__attribute__((used))
+int shim_nanosleep(const struct timespec *req, struct timespec *rem) {
+    if (!req || req->tv_sec < 0 || req->tv_nsec < 0 || req->tv_nsec >= 1000000000L) {
+        errno = EINVAL;
+        ESP_LOGD(TAG, "nanosleep invalid request");
+        return -1;
+    }
+
+    uint64_t total_ms = (uint64_t)req->tv_sec * 1000ULL + (uint64_t)(req->tv_nsec / 1000000L);
+    if (req->tv_nsec % 1000000L) {
+        total_ms += 1;
+    }
+
+    if (total_ms > 0) {
+        vTaskDelay(pdMS_TO_TICKS(total_ms));
+    }
+
+    if (rem) {
+        rem->tv_sec = 0;
+        rem->tv_nsec = 0;
+    }
+
+    ESP_LOGD(TAG, "nanosleep: %llu ms", (unsigned long long)total_ms);
+    return 0;
+}
+
+__attribute__((used))
+uid_t shim_getuid(void) { ESP_LOGD(TAG, "getuid -> 0"); return 0; }
+
+__attribute__((used))
+gid_t shim_getgid(void) { ESP_LOGD(TAG, "getgid -> 0"); return 0; }
+
+__attribute__((used))
+uid_t shim_geteuid(void) { ESP_LOGD(TAG, "geteuid -> 0"); return 0; }
+
+__attribute__((used))
+gid_t shim_getegid(void) { ESP_LOGD(TAG, "getegid -> 0"); return 0; }
+
+__attribute__((used))
+int shim_ftruncate(int fd, off_t length) {
+    if (length < 0) {
+        errno = EINVAL;
+        ESP_LOGD(TAG, "ftruncate invalid length=%ld", (long)length);
+        return -1;
+    }
+
+    int ret = ftruncate(fd, length);
+    if (ret < 0) {
+        ESP_LOGD(TAG, "ftruncate(fd=%d, len=%ld) failed: %s", fd, (long)length, strerror(errno));
+    } else {
+        ESP_LOGD(TAG, "ftruncate(fd=%d, len=%ld) ok", fd, (long)length);
+    }
+    return ret;
+}
+
+__attribute__((used))
+int shim_pipe(int pipefd[2]) {
+    if (!pipefd) {
+        errno = EINVAL;
+        ESP_LOGD(TAG, "pipe called with null array");
+        return -1;
+    }
+
+    for (int i = 0; i < MAX_PIPES; i++) {
+        if (s_pipes[i].used) {
+            continue;
+        }
+
+        QueueHandle_t q = xQueueCreate(PIPE_QUEUE_LENGTH, sizeof(uint8_t));
+        if (!q) {
+            errno = ENOMEM;
+            ESP_LOGD(TAG, "pipe queue allocation failed");
+            return -1;
+        }
+
+        s_pipes[i].used = true;
+        s_pipes[i].queue = q;
+        s_pipes[i].read_fd = PIPE_BASE_FD + (i * 2);
+        s_pipes[i].write_fd = PIPE_BASE_FD + (i * 2) + 1;
+        s_pipes[i].read_open = true;
+        s_pipes[i].write_open = true;
+
+        pipefd[0] = s_pipes[i].read_fd;
+        pipefd[1] = s_pipes[i].write_fd;
+
+        ESP_LOGD(TAG, "pipe created: rfd=%d wfd=%d", pipefd[0], pipefd[1]);
+        return 0;
+    }
+
+    errno = ENFILE;
+    ESP_LOGD(TAG, "pipe table exhausted");
+    return -1;
+}
+
+__attribute__((used))
+pid_t shim_getpid(void) {
+    TaskHandle_t handle = xTaskGetCurrentTaskHandle();
+    pid_t pid = (pid_t)(uintptr_t)handle;
+    ESP_LOGD(TAG, "getpid -> %d", (int)pid);
+    return pid;
+}
+
+__attribute__((used))
+int shim_gettimeofday(struct timeval *tv, struct timezone *tz) {
+    if (!tv) {
+        errno = EINVAL;
+        ESP_LOGD(TAG, "gettimeofday invalid tv=NULL");
+        return -1;
+    }
+
+    int64_t us = esp_timer_get_time();
+    tv->tv_sec = us / 1000000;
+    tv->tv_usec = us % 1000000;
+
+    if (tz) {
+        tz->tz_minuteswest = 0;
+        tz->tz_dsttime = 0;
+    }
+
+    ESP_LOGD(TAG, "gettimeofday -> %ld.%06ld", (long)tv->tv_sec, (long)tv->tv_usec);
+    return 0;
 }

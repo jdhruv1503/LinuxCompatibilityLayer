@@ -37,13 +37,6 @@ extern int load_and_run_elf(const char *path, int argc, char *argv[]);
  * Process ID Emulation
  *============================================================================*/
 
-// Map FreeRTOS task handle to "PID"
-pid_t shim_getpid(void) {
-    // Use task handle as pseudo-PID
-    TaskHandle_t handle = xTaskGetCurrentTaskHandle();
-    return (pid_t)(uintptr_t)handle;
-}
-
 pid_t shim_getppid(void) {
     // No real parent-child relationship - return 1 (init)
     return 1;
